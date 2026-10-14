@@ -16,7 +16,8 @@ Order and why:
   7 hitter projection      reads the panel, park surfaces and the K% bridge coefficients from step 8's previous run (bridge coefficients depend only on MiLB data)
   8 hitter MiLB bridge     coefficients + prospect table (reads league constants from step 7)
   9 hitter Pioneer bridge  provisional (MiLB mapping)
- 10 rest-of-season         2026 as-of snapshots; --fast skips (not a priority until 2027 in-season)
+ 10 college bridge        FanGraphs college exports in input/fangraphs_college/ (fl_hitter_bridge_college.py --build)
+ 11 rest-of-season         2026 as-of snapshots; --fast skips (not a priority until 2027 in-season)
  then: copy the published files (MANIFEST) to ../projections-dashboard/data and run its tests (pytest).
 Logs: output/run_logs/<timestamp>/<NN>_<step>.log
 """
@@ -30,11 +31,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DASH = os.path.join(HERE, "..", "projections-dashboard")
 STEPS = [("hitter panel", "fl_hitter_panel.py", False), ("position-player flags", "fl_position_player_flag.py", False), ("pitcher K% and BB%", "fl_production_projection.py", False),
          ("pitcher RA9 and WAR", "fl_ra9_trustmark_projection.py", False), ("park: wOBA surface", "fl_hitter_park_surface_final.py", True), ("park: HR surface", "fl_hitter_park_hr_surface.py", True),
-         ("hitter projection", "fl_hitter_projection.py", False), ("hitter MiLB bridge", "fl_hitter_bridge.py", False), ("hitter Pioneer bridge", "fl_hitter_bridge_pioneer.py", False),
+         ("hitter projection", "fl_hitter_projection.py", False), ("hitter MiLB bridge", "fl_hitter_bridge.py", False), ("hitter Pioneer bridge", "fl_hitter_bridge_pioneer.py", False), ("hitter college bridge", "fl_hitter_bridge_college.py --build", False),
          ("rest-of-season snapshots", "fl_ros_build.py", True)]
 MANIFEST = ["fl_2027_hitter_projections.parquet", "fl_hitter_history.parquet", "fl_hitter_model_coefs.json", "fl_2027_projections.parquet", "fl_ra9_trustmark_projection.parquet",
             "fl_projection_model_coefs.json", "position_player_pitchers.parquet", "fl_hitter_bridge_coefs.json", "fl_hitter_milb_prospects.parquet", "fl_hitter_milb_history.parquet",
-            "fl_hitter_pioneer_prospects.parquet", "fl_hitter_pioneer_history.parquet", "ros_hitters_2026.parquet", "ros_pitchers_2026.parquet",
+            "fl_hitter_pioneer_prospects.parquet", "fl_hitter_pioneer_history.parquet", "fl_hitter_college_prospects.parquet", "fl_hitter_college_history.parquet", "ros_hitters_2026.parquet", "ros_pitchers_2026.parquet",
             "fl_college_prospect_lookup.parquet", "fl_college_prospect_projections.parquet", "fl_pioneer_prospect_lookup.parquet", "fl_pioneer_prospect_projections.parquet",
             "fl_milb_prospect_lookup.parquet", "fl_milb_prospect_projections.parquet"]
 
@@ -47,9 +48,9 @@ def main(argv):
     for i, (name, script, slow) in enumerate(STEPS, 1):
         if i < start or (fast and slow):
             print(f"[{i:2d}] {name:28s} skipped"); continue
-        t0 = dt.datetime.now(); log = os.path.join(logdir, f"{i:02d}_{os.path.splitext(script)[0]}.log")
+        t0 = dt.datetime.now(); log = os.path.join(logdir, f"{i:02d}_{os.path.splitext(script.split()[0])[0]}.log")
         with open(log, "w", encoding="utf-8") as fh:
-            r = subprocess.run([sys.executable, script], cwd=HERE, stdout=fh, stderr=subprocess.STDOUT, env=env)
+            r = subprocess.run([sys.executable, *script.split()], cwd=HERE, stdout=fh, stderr=subprocess.STDOUT, env=env)
         secs = (dt.datetime.now() - t0).total_seconds()
         print(f"[{i:2d}] {name:28s} {'OK' if r.returncode == 0 else 'FAILED'}  ({secs:.0f}s)  {log}")
         if r.returncode != 0:
