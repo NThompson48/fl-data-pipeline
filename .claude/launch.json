@@ -1,0 +1,28 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "fl-projections-dashboard",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-c",
+        "import os, sys; sys.argv = ['streamlit', 'run', r'C:\\Users\\215nt\\PycharmProjects\\FLStuff\\projections-dashboard\\src\\app.py', '--server.port', os.environ.get('PORT', '8503'), '--server.headless', 'true']; from streamlit.web.cli import main; main()"
+      ],
+      "port": 8503,
+      "autoPort": true
+    },
+    {
+      "name": "fl-projections-dashboard-8502",
+      "runtimeExecutable": "streamlit",
+      "runtimeArgs": [
+        "run",
+        "C:\\Users\\215nt\\PycharmProjects\\FLStuff\\projections-dashboard\\src\\app.py",
+        "--server.port",
+        "8502",
+        "--server.headless",
+        "true"
+      ],
+      "port": 8502
+    }
+  ]
+}

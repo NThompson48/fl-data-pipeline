@@ -1,0 +1,80 @@
+{
+ "frozen_on": "2026-10-13",
+ "checks": {
+  "C1 pitcher K% + fastball velocity": {
+   "type": "model change (candidate, NOT in production)",
+   "form": "proj_K += b x (fb_velo_shrunk - population mean); constant; single term",
+   "trait": "mean effective velocity of four-seam / sinker in the feature window, shrunk by n / (n + 8.4) fastballs",
+   "coefficient": "frozen, fit on ROS 2025 + ROS 2026 pooled (see 'frozen')",
+   "samples": [
+    "2026 -> 2027 preseason (production K%)",
+    "2027 in-season, as of mid-season -> rest of 2027"
+   ],
+   "success": "RMSE and MAE both better, P(better) >= .90, in both samples"
+  },
+  "C2 hitter BB% + barrel%": {
+   "type": "model change (candidate, NOT in production)",
+   "form": "proj_BB += b x (barrel_pct_shrunk - population mean); constant; single term",
+   "trait": "barrels per tracked ball in play in the feature window, shrunk by the split-half n0",
+   "coefficient": "frozen, fit on ROS 2025 + ROS 2026 pooled",
+   "samples": [
+    "2026 -> 2027 preseason",
+    "2027 in-season, as of mid-season"
+   ],
+   "success": "RMSE and MAE both better, P(better) >= .90, in both samples"
+  },
+  "C3 hitter K% bridge prior (IN production since 2026-10-13)": {
+   "type": "confirmation",
+   "sample": "the 2026 FL debut class with a MiLB record: second-season (2027) K%",
+   "compare": "production (bridge prior) vs the same regression shrinking to the league mean",
+   "success": "RMSE and MAE better, P(better) >= .90; if worse with P(worse) >= .90, remove"
+  },
+  "C4 thin-history hitter survivorship": {
+   "type": "decision",
+   "sample": "2026 -> 2027 hitters with effective history < 100 PA, PA-weighted target",
+   "test": "mean error (actual - projected wOBA); pooled with the four earlier transitions",
+   "success": "apply the +.0046 step if the 5-transition interval excludes 0"
+  },
+  "C5 pitcher P(WAR>0) calibration by projected IP": {
+   "type": "calibration",
+   "groups": [
+    "< 22 projected IP",
+    "22-45",
+    "45+"
+   ],
+   "success": "predicted mean inside each group's 90% Wilson interval; the < 22 group was ~7 points optimistic in 2026"
+  },
+  "C6 hitter WAR range coverage": {
+   "type": "calibration",
+   "test": "share of realised 2027 WAR (batting + position + replacement) inside the 50 / 80 / 90% ranges",
+   "success": "each within 2 binomial SE of nominal"
+  },
+  "C7 baserunning persistence": {
+   "type": "data",
+   "test": "2026 -> 2027 correlation of published baserunning runs per PA (>= 150 PA both years) and the shrunk term's held-out RMSE",
+   "success": "decides whether baserunning returns to WAR (currently out of production)"
+  },
+  "C8 Trustmark surfaces": {
+   "type": "validation",
+   "test": "2027 balls at Trustmark (visitors + Mississippi at home): observed (wOBA - xwOBA) and HR vs the 2025-26 surface predictions, per hitter and overall",
+   "success": "calibration slope interval contains 1; level inside the 2025-26 bootstrap range"
+  },
+  "C9 fielding / position with two tracked seasons": {
+   "type": "data",
+   "test": "2026 -> 2027 persistence of fielding runs by position (infield if the data exist) and of position runs",
+   "success": "decides whether fielding returns to WAR (currently out of production)"
+  }
+ },
+ "frozen": {
+  "p:k:fb_velo": {
+   "b": 0.005431781874789106,
+   "n0_trait": 8.428182991954408,
+   "n_rows": 430
+  },
+  "h:bb:barrel_pct": {
+   "b": 0.2833045015341363,
+   "n0_trait": 44.95009845856656,
+   "n_rows": 484
+  }
+ }
+}

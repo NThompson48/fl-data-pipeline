@@ -1,0 +1,26 @@
+# generated data and raw inputs stay out of version control (rebuilt by run_all.py / pulled from the sources)
+output/
+input/
+_backup*/
+_code_backup*/
+*.parquet
+*.csv
+*.xlsx
+*.zip
+*.png
+*.pkl
+__pycache__/
+.idea/
+.vscode/
+.pytest_cache/
+
+# credentials -- never commit
+secrets.toml
+.env
+*.env
+
+# run logs, model binaries, notebook backups
+*.log
+*.joblib
+*.bak*
+pull_air_swing_mechanics_plot
