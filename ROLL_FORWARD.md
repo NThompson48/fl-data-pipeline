@@ -22,7 +22,7 @@ read these.
 
 ## 3. Data that must be refreshed
 Supabase tables (lineup_stats, pitches, war_players, advanced_splits, war_pitchers), the tracking file
-`2025_2026_pitches.parquet` (add 2027), MiLB / Pioneer / college source tables.
+`2025_2026_pitches.parquet` (add 2027), MiLB / Pioneer / college source tables (Pioneer: rerun `pull_statscrew_pioneer_batting.py` with the new season in its year range; college: FanGraphs exports into input/fangraphs_college/).
 
 ## 4. After the rebuild
 `python run_all.py`, then the pre-registered 2027 checks (`fl_2027_preregistered_checks.py`).
