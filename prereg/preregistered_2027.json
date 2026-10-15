@@ -62,7 +62,8 @@
   "C9 fielding / position with two tracked seasons": {
    "type": "data",
    "test": "2026 -> 2027 persistence of fielding runs by position (infield if the data exist) and of position runs",
-   "success": "decides whether fielding returns to WAR (currently out of production)"
+   "success": "decides whether fielding returns to WAR (currently out of production)",
+   "metric_spec": "fl_fielding_part_2026.py as of 2026-10-14 (PART-style infield runs: per-position x set boosted out models on ball + starting position, cross-fitted by game, multi-fielder credit, P/C term, centred within position, no speed proxy); success = 2026->2027 correlation of runs per opportunity and pooled full-time reliability >= .40 -> shrunk term enters WAR"
   }
  },
  "frozen": {
