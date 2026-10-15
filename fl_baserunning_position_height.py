@@ -2,10 +2,9 @@
 fl_baserunning_position_height.py -- do baserunning runs differ by POSITION, and does player HEIGHT matter? (user 2026-10-14, after fixing hitter WAR = batting + position adjustment
 + replacement: "Can we check if baserunning runs typically differ by position also?" / "Or if player height matters for baserunning runs?")
 
-Data:
-  baserunning runs  2026 published bsr_runs (the 2025 column is all zeros = placeholder; 2022-24 have none) -> one season, 2026 only
-  steal attempts    SB + CS, 2022-24 only (the panel has no SB / CS for 2025-26): a second, independent speed measure
-  position          primary_pos (2025-26 only); for the 2022-24 steal check each player takes his latest 2025-26 primary position
+Data (user 2026-10-14: "use bsr_runs from the war_players table for this analysis. that is all I care about."):
+  baserunning runs  war_players.bsr_runs, reg_season (populated for 2026 only; 2025 is null) with that table's pa and primary_pos; a player on two teams is
+                    summed, his position = the row with more PA
   height / weight   pbp_players (height "6'1\"", weight, dob), falling back to rosters.height_in; age on 2026-07-01
 Methods:
   position: PA-weighted runs per 600 PA vs league with a 90% player bootstrap; 'no position differences' = permutation of position labels
@@ -85,17 +84,14 @@ def by_height(d, col, label, unit, B=2000, P=5000):
 
 
 def main():
-    h = pd.read_parquet("output/fl_hitter_panel.parquet"); bi = bio()
-    pos = h[h["year"].isin([2025, 2026]) & h["primary_pos"].isin(POS)].sort_values("year").groupby("name_clean")["primary_pos"].last()
-    b = h[(h["year"] == 2026) & h["bsr_runs"].notna() & (h["pa"] > 0)].groupby("name_clean").agg(pa=("pa", "sum"), bsr=("bsr_runs", "sum"), pos=("primary_pos", "first")).join(bi)
-    s = h[h["year"].between(2022, 2024) & h["sb"].notna() & (h["pa"] > 0)].assign(att=lambda q: q["sb"] + q["cs"]).groupby("name_clean").agg(pa=("pa", "sum"), att=("att", "sum")).join(bi)
-    s["pos"] = pos.reindex(s.index)
-    print(f"2026 baserunning hitters {len(b)}, with height {b['ht'].notna().sum()} ({b.loc[b['ht'].notna(), 'pa'].sum() / b['pa'].sum():.1%} of PA); "
-          f"2022-24 steal hitters {len(s)}, with a 2025-26 position {s['pos'].notna().sum()}, with height {s['ht'].notna().sum()}")
-    by_position(b[b["pos"].isin(POS)], "bsr", "2026 BASERUNNING RUNS by position, per 600 PA vs league (90% player bootstrap)")
-    by_position(s[s["pos"].isin(POS)], "att", "2022-24 STEAL ATTEMPTS (SB + CS) by later position, per 600 PA vs league")
-    by_height(b[b["ht"].notna()], "bsr", "2026 BASERUNNING RUNS vs HEIGHT", "runs")
-    by_height(s[s["ht"].notna()], "att", "2022-24 STEAL ATTEMPTS vs HEIGHT", "attempts")
+    w = read_sql_df(text("select player, pa, bsr_runs, primary_pos from war_players where game_type = 'reg_season' and bsr_runs is not null and pa > 0"))
+    w["name_clean"] = w["player"].map(lambda x: hb.norm(" ".join(reversed(str(x).split(", "))) if ", " in str(x) else x))
+    pos = w.sort_values("pa").groupby("name_clean")["primary_pos"].last()
+    b = w.groupby("name_clean").agg(pa=("pa", "sum"), bsr=("bsr_runs", "sum")).join(pos.rename("pos")).join(bio())
+    print(f"war_players 2026 reg_season: {len(b)} hitters, {b['pa'].sum():.0f} PA, bsr_runs sum {b['bsr'].sum():+.2f}; positions {b['pos'].value_counts(dropna=False).to_dict()}; "
+          f"with height {b['ht'].notna().sum()} ({b.loc[b['ht'].notna(), 'pa'].sum() / b['pa'].sum():.1%} of PA)")
+    by_position(b[b["pos"].isin(POS)], "bsr", "war_players bsr_runs by position, per 600 PA vs league (90% player bootstrap)")
+    by_height(b[b["ht"].notna()], "bsr", "war_players bsr_runs vs HEIGHT", "runs")
 
 
 if __name__ == "__main__":
