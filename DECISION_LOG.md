@@ -4581,8 +4581,8 @@ PRE-STATED RULE: adopt only if held-out bsr RMSE improves vs the primary positio
 (a) held-out 2026 bsr (10-fold x 20, frozen inverse-variance weights), runs per 600 PA: RMSE 9.291 -> 9.300 (+0.009, 90% [-0.116, +0.135], P(better) .44); MAE 6.519 -> 6.527 (+0.008, P .45).
 (b) WAR backtest (146): RMSE 1.3476 -> 1.3415 (-0.0062, [-0.0150, +0.0021], P .89); MAE 1.0983 -> 1.0957 (-0.0026, [-0.0114, +0.0061], P .68).
 DECISION: rule NOT met at (a) -> production stays on the primary position (incl. DH >= 50%).  The small WAR gain in (b) is within noise.
-SHIPPED (same day): rebuilt (run_all --from 7) and published.  Projected WAR effect of the baserunning term over projected PA (mean): CF about +0.4, SS +0.2, C -0.2, DH -0.3 (see the
-dashboard).  Dashboard player pages (user: "update the player pages with all meaningful components of their projections"): a "How it adds up" table on both pages.
+SHIPPED (same day): rebuilt (run_all --from 7) and published.  Projected WAR effect of the baserunning term over projected PA (mean, range): CF +0.20 (+0.14 to +0.32), SS +0.10, 2B / RF +0.02,
+1B / LF -0.01 to -0.02, 3B -0.06, C -0.10, DH -0.17 (-0.30 to -0.12); hitters with no 2026 position 0.  Dashboard player pages (user: "update the player pages with all meaningful components of their projections"): a "How it adds up" table on both pages.
   Hitters: K% (regressed + Whiff% + MiLB bridge), BB% (regressed + Swing%), HR/PA, wOBA (direct, from components, average, + xwOBA, + EV90, + Mississippi), PA and chance he
   plays; WAR parts in runs / WAR / WAR per 400 (batting, position, baserunning with the position used, replacement, total, Mississippi park fit).  The hitter file now keeps
   proj_woba_xw so the wOBA steps sum.
