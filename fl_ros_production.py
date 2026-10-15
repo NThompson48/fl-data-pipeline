@@ -90,7 +90,9 @@ def hitter_snapshot(T_h, year, asof, wfit, delta_seasons, mis_share=0.5):
     import fl_bsr_proxy as _bp0, fl_hitter_projection as _hp0
     pt = _bp0.positions(2026); pt = pt[pt["pos_adj"].notna()]; glab = pt["pos"] if _hp0.POS_DH_GROUP else pt["field_pos"]
     grp = pt.groupby(glab)["pos_adj"].sum() / pt.groupby(glab)["pa"].sum()                 # 2026 group rates, DH its own group (as the preseason projection)
-    pos = pd.Series(f.index, index=f.index).map(glab).fillna(pos_lab).map(grp).fillna(0.0)
+    grp_rate = pd.Series(f.index, index=f.index).map(glab).fillna(pos_lab).map(grp).fillna(0.0)
+    own_pa = pd.Series(f.index, index=f.index).map(pt["pa"]); own = pd.Series(f.index, index=f.index).map(pt["pos_adj"]) / own_pa
+    pos = ((own_pa * own + _hp0.POS_N0 * grp_rate) / (own_pa + _hp0.POS_N0)).where(own.notna(), grp_rate)     # own 2026 rate shrunk toward the group, as the preseason projection
     t26 = cur_pos; rpw = float((t26["rar"] / t26["war"].replace(0, np.nan)).median()); repl = float((t26["repl_runs"] / t26["pa"]).median())
     import fl_hitter_projection as _hp
     fld_w = fld if _hp.WAR_INCLUDE_FIELDING else fld * 0.0                     # production WAR = batting + position + baserunning proxy + replacement (user 2026-10-13 / 14)

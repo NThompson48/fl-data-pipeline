@@ -4621,3 +4621,6 @@ CHRONOLOGICAL halves (split 2026-07-12, 178 hitters; group changed for 22%): RMS
 ALTERNATING games (236; pure sampling): best n0 20 (10-30); n0 100 -> 20 RMSE 1.600 -> 1.370, MAE 1.064 -> 0.880 (P 1.0); spread 0.6.
 CAVEAT: between-season role change (signings, trades, aging) is larger than within-season, so these n0 / spread values are LOWER bounds for a season-ahead projection.
 IMPACT on 2027 projections: n0 100 -> 0: mean |dWAR| .033 (max .27); -> 25: .015 (max .10); -> 50: .008 (max .05).
+DECISION (user 2026-10-14): POS_N0 100 -> 25; residual 6.0 kept.  Rest of season now uses the same own-rate blend (was group only).  WAR backtest (146; own role = target season,
+flatters low n0): RMSE 1.3186 -> 1.3179 (-0.0007, [-0.0029, +0.0013], P .71); MAE 1.0637 -> 1.0634 (-0.0003, [-0.0024, +0.0015], P .62).  C9 text updated to n0 = 25.
+Rebuilt (run_all --from 7), published, 49 tests pass.

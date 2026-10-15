@@ -82,7 +82,10 @@ FLD_N0, FLD_RESID_PER_PA = 200.0, 6.2 / 600
 # (dropping it costs WAR RMSE +.11, fl_fielding_drop_report.py), infielders get 0 with a flag and the realised season spread of MEASURED outfielders as their
 # fielding uncertainty (computed in build_projections from 2026 OF regulars, ~12 runs / 600 PA) instead of the 6.2 residual of a measured player.
 FLD_MEASURED_POS = ("LF", "CF", "RF", "C")
-POS_N0, POS_RESID_PER_PA = 100.0, 6.0 / 600
+# POS_N0 = 25 (user 2026-10-14, fl_pos_shrink_2026.py): within 2026, first-half -> second-half position runs favour little shrinkage (best n0 0, 90% 0-20; n0 100 -> 0 RMSE
+# 2.95 -> 2.77 per 600 PA); 25 = top of that range plus a small allowance for between-season role change (unmeasurable).  Residual 6.0 kept (within-season spread 2.7 is a
+# lower bound; covers offseason role change until 2027, C6 / C9).
+POS_N0, POS_RESID_PER_PA = 25.0, 6.0 / 600
 # WAR COMPONENTS IN PRODUCTION: batting + positional adjustment + replacement (user 2026-10-13) + BASERUNNING PROXY (user 2026-10-14).  Fielding stays out (infield not
 # measured; outfield double-counts CF difficulty): fld_rate is computed and stored only.  Baserunning = the position average incl. DH (>= 50% of PA at DH) from 2026
 # war_players.bsr_runs (fl_bsr_proxy.py), NOT the player's own record; WAR backtest -> 2026: RMSE 1.374 -> 1.348, MAE 1.124 -> 1.098 (fl_bsr_proxy_validation.py).
