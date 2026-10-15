@@ -4549,3 +4549,21 @@ REVISION (same day, user: "use bsr_runs from the war_players table for this anal
 steal-attempt checks removed; 24 hitters with no primary_pos excluded from the position test).  POSITION: CF +5.6 (3.7 to 7.4), SS +2.7 (0.1 to 5.3), RF +0.8, 2B -0.2, LF -0.8, 1B -2.0, 3B -2.0,
 C -3.3 (-5.1 to -1.4) runs per 600 PA; permutation p .0002.  HEIGHT: alone -0.35 per inch (-0.78 to +0.06, p .10); with weight + age +0.23 (-0.28 to +0.75) while weight -1.0 per 10 lb
 (-1.5 to -0.4); with position as well, weight -0.56 (-1.15 to +0.02).  Conclusions unchanged: position matters; height does not beyond weight.
+
+### 2026-10-14 -- Baserunning proxy for hitter WAR (position + DH + height + weight): built and validated, NOT yet switched on (fl_bsr_proxy.py, fl_bsr_proxy_validation.py)
+REQUEST: "use position, height, and weight as the proxies for baserunning WAR"; then "DHs probably have worse baserunning. It's important to include them".
+DH: war_players.primary_pos never says DH (regular DHs are filed at 1B / RF / LF, cameo DHs have no position).  2026 baserunning by share of PA at DH: <= 10% +0.8, 10-30% -0.2,
+30-50% +0.8, 50-70% -5.3, > 70% -6.3 runs per 600 PA -> DH = >= 50% of PA at DH (dh_pa; 2026 only -- 2025 dh_pa and pos_innings are broken, pbp_events starts 2026).
+PROXY: WLS of 2026 bsr_runs per PA (weights PA) on 9 position levels incl. DH + height + weight; 377 hitters.  Effects per 600 PA: CF +5.5, SS +2.4, RF +0.7, 2B +0.2, 1B 0.0,
+LF -0.5, 3B -1.7, C -3.2, DH -5.3; height +0.04 per inch, weight -0.28 per 10 lb (1B's earlier -1.4 was mostly DHs filed at 1B).  Residual true-talent SD 3.95 runs / 600 PA.
+(a) 2026 bsr per PA, 10-fold CV by player x 20 repeats, frozen inverse-variance weights (n0_eval 378 PA), runs per 600 PA:
+    league mean -> position:                 RMSE 9.549 -> 9.291 (-0.258, 90% [-0.497, -0.015], P .96); MAE 6.671 -> 6.519 (-0.152, [-0.411, +0.121], P .83)
+    league mean -> height + weight:          RMSE -0.052 (P .73); MAE -0.042 (P .68)
+    league mean -> position + height + weight: RMSE -0.196 (P .92); MAE -0.103 (P .74)
+    position -> position + height + weight:  RMSE +0.062 (90% [+0.016, +0.117], P(better) .01); MAE +0.049 ([+0.008, +0.097], P .02)  -> height / weight HURT out of sample once position (incl. DH) is known.
+(b) WAR backtest -> 2026 (146 hitters, realised WAR incl. baserunning, realised-PA weights; cross-fitted proxy):
+    position + height + weight: RMSE 1.3740 -> 1.3494 (-0.0246, [-0.0458, -0.0054], P .99); MAE 1.1244 -> 1.0994 (-0.0250, [-0.0447, -0.0055], P .98)
+    position only:              RMSE 1.3740 -> 1.3476 (-0.0264, [-0.0465, -0.0069], P .99); MAE 1.1244 -> 1.0983 (-0.0261, [-0.0452, -0.0066], P .99)
+    DH mean error +0.81 -> +0.56 WAR, CF -0.38 -> -0.13, C +0.74 -> +0.63.
+CAVEAT: the backtest's "2025" positions are the 2026 positions copied back (lineup_stats has no real 2025 positions), so role is target-season in old and new alike.
+DECISION PENDING (user): baserunning proxy helps WAR either way; position-only (incl. DH) is as good or better than adding height + weight, which overfit.
