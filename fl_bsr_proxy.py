@@ -14,6 +14,7 @@ Uncertainty (for the WAR simulation): residual variance law around the proxy, Va
         fitted residuals); TAU2 = true-talent spread the proxy does not explain, NOISE = one season's baserunning noise per PA.
 Heights / weights: pbp_players (height "6'1\"", weight), falling back to rosters (listed roster values, ~95% rounded to 0 / 5 lb).
 """
+import functools
 import re
 
 import numpy as np
@@ -45,6 +46,7 @@ def bio():
     return p.combine_first(r)
 
 
+@functools.lru_cache(maxsize=None)
 def positions(year=2026):
     """name_clean -> baserunning position for a season: DH if >= DH_SHARE of PA at DH, else war_players.primary_pos (row with more PA); also returns pa and bsr."""
     from sqlalchemy import text
@@ -57,7 +59,7 @@ def positions(year=2026):
 
 
 def training_data():
-    d = positions(2026); d = d[d["bsr"].notna()].join(bio())
+    d = positions(2026).copy(); d = d[d["bsr"].notna()].join(bio())
     return d[d["pos"].isin(POS)]
 
 
@@ -94,13 +96,22 @@ def predict(m, pos, ht, wt):
     return b[0] + X[:, len(POS):] @ b[1:]
 
 
+PRODUCTION_FEATURES = ("pos",)      # user 2026-10-14: position incl. DH only -- height / weight hurt held-out accuracy once DH is separated (fl_bsr_proxy_validation.py)
+
+
+@functools.lru_cache(maxsize=None)
 def production_model():
-    return fit(training_data())
+    return fit(training_data(), PRODUCTION_FEATURES)
+
+
+def player_positions(names, fallback):
+    """Baserunning position for projected hitters: 2026 role (DH if >= 50% of PA at DH), else the projection's primary_pos; unknown -> average position."""
+    return pd.Series(names).map(positions(2026)["pos"]).fillna(pd.Series(fallback).reset_index(drop=True)).to_numpy()
 
 
 if __name__ == "__main__":
-    d = training_data(); m = fit(d)
+    d = training_data(); m = fit(d, PRODUCTION_FEATURES)
     print(f"fit on {len(d)} hitters, {d['pa'].sum():.0f} PA")
     print("position effects (runs per 600 PA):", {p: round(600 * v, 2) for p, v in zip(POS, m["beta"][:len(POS)])}, "unknown:", round(600 * m["pos_unknown"], 2))
-    print(f"height {600 * m['beta'][-2]:+.3f} runs / 600 PA per inch, weight {6000 * m['beta'][-1]:+.3f} per 10 lb; residual true-talent SD {600 * np.sqrt(max(m['tau2'], 0)):.2f} "
+    print(f"production features {m['features']}; residual true-talent SD {600 * np.sqrt(max(m['tau2'], 0)):.2f} "
           f"runs / 600 PA, season noise SD at 600 PA {600 * np.sqrt(m['noise'] / 600):.2f}")

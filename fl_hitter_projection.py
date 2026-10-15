@@ -7,8 +7,9 @@ What a hitter gets (everything park-neutral unless it says Mississippi):
   wOBA                            50/50 blend of (a) the same regression applied to wOBA itself and (b) wOBA rebuilt from the regressed K%, BB%, HR/PA;
                                   plus gamma x (shrunk xwOBA - blend) for contact quality and an EV90 power prior (fades with PA)
   PA                              per team game: a + b x PA_t/G_t + c x projected wOBA quality, at 102 games, if he plays
-  WAR parts                       PRODUCTION (user 2026-10-13): batting (wOBA over league / wOBA scale) + position (shrunk own rate toward his position's) + replacement.
-                                  Fielding (OF / C only) and shrunk 2026 baserunning are computed and stored but left out (WAR_INCLUDE_FIELDING / _BASERUNNING flags)
+  WAR parts                       PRODUCTION: batting (wOBA over league / wOBA scale) + position (shrunk own rate toward his position's) + replacement (user 2026-10-13)
+                                  + baserunning = his position's average incl. DH (fl_bsr_proxy.py, user 2026-10-14).  Fielding (OF / C only) is computed and stored but
+                                  left out (WAR_INCLUDE_FIELDING flag).
   WAR distribution                Monte Carlo over PA, wOBA error (a + b/PA law), fielding, position and baserunning error; playing time CORRELATED with
                                   the season's performance (rho, fl_informative_pt_test.py: bad seasons lose PA)
   Mississippi                     POST-PROJECTION, half his PA at TrustmarkPark: wOBA surface (exit speed x launch angle x side, the surface's own level) + the
@@ -38,6 +39,7 @@ import fl_hitter_whiff as hwf
 import fl_hitter_swing as hsw
 import fl_hitter_depth3_test as d3
 import fl_hitter_park as park
+import fl_bsr_proxy as bsr_proxy
 
 warnings.filterwarnings("ignore")
 
@@ -81,11 +83,11 @@ FLD_N0, FLD_RESID_PER_PA = 200.0, 6.2 / 600
 # fielding uncertainty (computed in build_projections from 2026 OF regulars, ~12 runs / 600 PA) instead of the 6.2 residual of a measured player.
 FLD_MEASURED_POS = ("LF", "CF", "RF", "C")
 POS_N0, POS_RESID_PER_PA = 100.0, 6.0 / 600
-# WAR COMPONENTS IN PRODUCTION (user 2026-10-13): batting + positional adjustment + replacement only.  Fielding (infield not measured; outfield double-counts CF difficulty)
-# and baserunning (one season, no cross-season check) are computed and stored (fld_rate, bsr_rate) but NOT in projected WAR.  Flip to True to restore them.
+# WAR COMPONENTS IN PRODUCTION: batting + positional adjustment + replacement (user 2026-10-13) + BASERUNNING PROXY (user 2026-10-14).  Fielding stays out (infield not
+# measured; outfield double-counts CF difficulty): fld_rate is computed and stored only.  Baserunning = the position average incl. DH (>= 50% of PA at DH) from 2026
+# war_players.bsr_runs (fl_bsr_proxy.py), NOT the player's own record; WAR backtest -> 2026: RMSE 1.374 -> 1.348, MAE 1.124 -> 1.098 (fl_bsr_proxy_validation.py).
 WAR_INCLUDE_FIELDING = False
-WAR_INCLUDE_BASERUNNING = False
-BSR_N0, BSR_TAU = 300.0, 0.0094      # baserunning (2026 published bsr_runs only; fl_baserunning_term_test.py): shrink n0 PA toward the league mean; BSR_TAU = SD of true talent per PA (published scale), used for the WAR simulation
+WAR_INCLUDE_BASERUNNING = True
 GAP_PA, GAP_P_RETURN = 166.0, 0.065         # hitters whose last season is 2025: median PA of the 26 who came back (of 402), return rate
 N_SIM = 3000
 # informative playing time (user 2026-10-12): corr(standardised season wOBA error, PA residual) in the 2025 -> 2026 backtest, 2-fold cross-fit (fl_informative_pt_test.py,
@@ -279,11 +281,11 @@ def build_projections(p, fit):
     d["pos_rate"] = np.where(d["gap"], d["pos_group_rate"], (d["pa_t"] * own_pos + POS_N0 * d["pos_group_rate"]) / (d["pa_t"] + POS_N0))
     d["bat_rate"] = (d["proj_woba"] - lgw) / SC
     d["repl_rate"] = repl
-    bs = p[p["year"] == 2026].drop_duplicates("name_clean").set_index("name_clean"); okb = bs["bsr_runs"].notna() & (bs["pa"] > 0)
-    bsr_mu = float(bs.loc[okb, "bsr_runs"].sum() / bs.loc[okb, "pa"].sum()) if okb.any() else 0.0
-    pa_b = d["name_clean"].map(bs["pa"].where(okb)); r_b = d["name_clean"].map((bs["bsr_runs"] / bs["pa"]).where(okb))
-    d["bsr_rate"] = (bsr_mu + ((r_b - bsr_mu) * pa_b / (pa_b + BSR_N0)).fillna(0.0)).astype(float); d["bsr_pa_basis"] = pa_b.fillna(0.0)          # shrunk baserunning runs per PA (league mean when he has no 2026 baserunning data)
-    d["rar_rate"] = d["bat_rate"] + d["pos_rate"] + repl + (d["fld_rate"] if WAR_INCLUDE_FIELDING else 0.0) + (d["bsr_rate"] if WAR_INCLUDE_BASERUNNING else 0.0)   # runs above replacement per PA, park-neutral (production: bat + position + replacement)
+    bm = bsr_proxy.production_model()                                                    # baserunning runs per PA from position incl. DH (2026 bsr_runs)
+    d["bsr_pos"] = bsr_proxy.player_positions(d["name_clean"], d["primary_pos"])
+    d["bsr_rate"] = bsr_proxy.predict(bm, d["bsr_pos"], d["name_clean"].map(lambda _: np.nan), d["name_clean"].map(lambda _: np.nan))
+    d["bsr_tau2"], d["bsr_noise"] = bm["tau2"], bm["noise"]                              # residual true-talent variance per PA^2 and one season's noise per PA (WAR simulation)
+    d["rar_rate"] = d["bat_rate"] + d["pos_rate"] + repl + (d["fld_rate"] if WAR_INCLUDE_FIELDING else 0.0) + (d["bsr_rate"] if WAR_INCLUDE_BASERUNNING else 0.0)   # runs above replacement per PA, park-neutral (production: bat + position + baserunning + replacement)
     d["rar_per600"] = 600 * d["rar_rate"]
     d["war_per600"] = d["rar_per600"] / rpw
     d["rpw"], d["repl_per_pa"] = rpw, repl
@@ -329,7 +331,7 @@ def simulate_war(d, c, seed=7):
     bat = (woba - c["lg"]) / SC
     fld = (d["fld_rate"].to_numpy()[:, None] + d["fld_sd_rate"].to_numpy()[:, None] * rng.standard_normal((n, N_SIM))) if WAR_INCLUDE_FIELDING else 0.0
     pos = d["pos_rate"].to_numpy()[:, None] + POS_RESID_PER_PA * rng.standard_normal((n, N_SIM))
-    bsr_mean = d["bsr_rate"].to_numpy()[:, None] * pa; bsr_sd = np.sqrt(pa ** 2 * BSR_TAU ** 2 * BSR_N0 / (pa + BSR_N0) + pa * BSR_TAU ** 2 * BSR_N0)        # posterior spread of the true rate + single-season baserunning noise (runs)
+    bsr_mean = d["bsr_rate"].to_numpy()[:, None] * pa; bsr_sd = np.sqrt(pa ** 2 * d["bsr_tau2"].to_numpy()[:, None] + pa * d["bsr_noise"].to_numpy()[:, None])   # his true rate around the position proxy + one season's baserunning noise (runs)
     runs = pa * (bat + fld + pos + c["repl"]) + ((bsr_mean + bsr_sd * rng.standard_normal((n, N_SIM))) if WAR_INCLUDE_BASERUNNING else 0.0)
     war = runs / c["rpw"]
     fit_adj = (d["mis_woba_shift"].to_numpy()[:, None] - d["mis_shift_avg"].iloc[0]) / SC * pa / c["rpw"]
@@ -362,9 +364,9 @@ def main(publish: bool):
     d["proj_season"] = TARGET_YEAR
 
     keep = ["name_clean", "hitter", "team", "primary_pos", "side", "last_season", "gap", "pa_t", "proj_pa", "p_return",
-            "proj_k", "proj_k_reg", "k_bridge_dev", "k_bridge_term", "whiff_term", "whiff_swing_pct", "swings", "proj_bbr", "proj_bbr_reg", "swing_term", "swing_pct_pool", "pitches_seen", "proj_hrr", "proj_babip", "proj_hbpr", "woba_direct", "woba_comp", "xwoba", "xwoba_shrunk", "proj_woba", "proj_woba_base", "ev90_term", "ev90_pool", "bbe_pool", "lg_woba", "proj_wrc_plus",
+            "proj_k", "proj_k_reg", "k_bridge_dev", "k_bridge_term", "whiff_term", "whiff_swing_pct", "swings", "proj_bbr", "proj_bbr_reg", "swing_term", "swing_pct_pool", "pitches_seen", "proj_hrr", "proj_babip", "proj_hbpr", "woba_direct", "woba_comp", "xwoba", "xwoba_shrunk", "proj_woba", "proj_woba_base", "proj_woba_xw", "ev90_term", "ev90_pool", "bbe_pool", "lg_woba", "proj_wrc_plus",
             "proj_woba_mis", "wrc_plus_mis", "mis_woba_shift", "proj_k_mis", "proj_bbr_mis", "proj_hrr_mis", "mis_park_fit_runs", "proj_air_per_pa", "air_pct_shrunk",
-            "bat_rate", "fld_rate", "fld_measured", "pos_rate", "bsr_rate", "bsr_pa_basis", "repl_rate", "rar_per600", "war_per600", "rpw", "repl_per_pa",
+            "bat_rate", "fld_rate", "fld_measured", "pos_rate", "bsr_rate", "bsr_pos", "repl_rate", "rar_per600", "war_per600", "rpw", "repl_per_pa",
             "proj_war", "proj_war_p10", "proj_war_p50", "proj_war_p90", "p_war_pos", "proj_war_mis", "proj_war_mis_p10", "proj_war_mis_p90", "p_war_pos_mis",
             "avg_ev", "ev90", "max_ev", "barrel_pct", "hardhit_pct", "sweetspot_pct", "pull_air_pct", "gb_pct", "whiff_pct", "chase_pct", "zswing_pct", "zcontact_pct", "swing_pct", "xdamage",
             "woba_raw", "woba_n"]

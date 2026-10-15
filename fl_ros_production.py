@@ -90,14 +90,19 @@ def hitter_snapshot(T_h, year, asof, wfit, delta_seasons, mis_share=0.5):
     pos = pos_lab.map(grp).fillna(0.0)
     t26 = cur_pos; rpw = float((t26["rar"] / t26["war"].replace(0, np.nan)).median()); repl = float((t26["repl_runs"] / t26["pa"]).median())
     import fl_hitter_projection as _hp
-    fld_w = fld if _hp.WAR_INCLUDE_FIELDING else fld * 0.0                     # production WAR = batting + position + replacement (user 2026-10-13)
-    rate = (woba_ros - lg_level) / SC + fld_w + pos + repl
+    fld_w = fld if _hp.WAR_INCLUDE_FIELDING else fld * 0.0                     # production WAR = batting + position + baserunning proxy + replacement (user 2026-10-13 / 14)
+    import fl_bsr_proxy as _bp
+    bm = _bp.production_model(); bsr = pd.Series(_bp.predict(bm, _bp.player_positions(f.index, pos_lab.to_numpy()), [np.nan] * len(f), [np.nan] * len(f)), index=f.index)
+    bsr_w = bsr if _hp.WAR_INCLUDE_BASERUNNING else bsr * 0.0                  # position average incl. DH, fitted on FULL-season 2026 bsr_runs (in-season 2026 snapshots see it: display only)
+    rate = (woba_ros - lg_level) / SC + fld_w + pos + bsr_w + repl
     rng = np.random.default_rng(1)
     n = len(f); S = 800
     pa_d = np.clip(pa_ros.to_numpy()[:, None] + HIT_PA_SD * rng.standard_normal((n, S)) * np.minimum(1.0, pa_ros.to_numpy()[:, None] / 40 + 0.0), 0, None)
     wsd = np.sqrt(LUCK_A + LUCK_B / np.maximum(pa_d, 5))
     r_d = (woba_ros.to_numpy()[:, None] + wsd * rng.standard_normal((n, S)) - lg_level) / SC + ((fld.to_numpy()[:, None] + FLD_RESID * rng.standard_normal((n, S))) if _hp.WAR_INCLUDE_FIELDING else 0.0) + pos.to_numpy()[:, None] + POS_RESID * rng.standard_normal((n, S)) + repl
     war = pa_d * r_d / rpw
+    if _hp.WAR_INCLUDE_BASERUNNING:                                               # baserunning runs: proxy x PA + his true rate around it + the remaining season's noise
+        war = war + (pa_d * bsr.to_numpy()[:, None] + np.sqrt(pa_d ** 2 * bm["tau2"] + pa_d * bm["noise"]) * rng.standard_normal((n, S))) / rpw
     out = pd.DataFrame(index=f.index)
     out["team"] = wf["team"]; out["ytd_pa"] = f["n"]; out["days_since"] = wf["days_since"]; out["g_rem"] = wf["g_rem"]
     out["ytd_woba"] = np.where(f["n"] > 0, f["woba_sum"] / f["n"].replace(0, np.nan), np.nan); out["ytd_k"] = f["k"] / f["n"]; out["ytd_bb"] = f["bb"] / f["n"]
@@ -105,7 +110,7 @@ def hitter_snapshot(T_h, year, asof, wfit, delta_seasons, mis_share=0.5):
     out["ros_woba"] = woba_ros; out["ros_k"] = pred["k_final"]; out["ros_bb"] = pred["bbr_final"]
     out["ros_wrc_plus"] = 100 * (1 + (woba_ros - lg_level) / (SC * 0.1529))
     out["ros_pa"] = pa_ros
-    out["bat_rate"] = (woba_ros - lg_level) / SC; out["fld_rate"] = fld; out["pos_rate"] = pos; out["repl_rate"] = repl
+    out["bat_rate"] = (woba_ros - lg_level) / SC; out["fld_rate"] = fld; out["pos_rate"] = pos; out["bsr_rate"] = bsr_w; out["repl_rate"] = repl
     out["ros_war"] = war.mean(1); out["ros_war_p10"] = np.percentile(war, 10, axis=1); out["ros_war_p90"] = np.percentile(war, 90, axis=1); out["p_war_pos"] = (war > 0).mean(1)
     # Mississippi: wOBA shift for his projected HR rate and air balls, half his PA at TrustmarkPark, applied to the ROS wOBA (display)
     out["act_woba"] = f["woba_ros"]; out["act_k"] = f["k_ros"]; out["act_bb"] = f["bb_ros"]; out["act_pa"] = f["n_ros"]

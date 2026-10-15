@@ -34,7 +34,7 @@ STEPS = [("hitter panel", "fl_hitter_panel.py", False), ("position-player flags"
          ("hitter projection", "fl_hitter_projection.py", False), ("hitter MiLB bridge", "fl_hitter_bridge.py", False), ("hitter Pioneer bridge", "fl_hitter_bridge_pioneer.py", False), ("hitter college bridge", "fl_hitter_bridge_college.py --build", False),
          ("rest-of-season snapshots", "fl_ros_build.py", True)]
 MANIFEST = ["fl_2027_hitter_projections.parquet", "fl_hitter_history.parquet", "fl_hitter_model_coefs.json", "fl_2027_projections.parquet", "fl_ra9_trustmark_projection.parquet",
-            "fl_projection_model_coefs.json", "position_player_pitchers.parquet", "fl_hitter_bridge_coefs.json", "fl_hitter_milb_prospects.parquet", "fl_hitter_milb_history.parquet",
+            "fl_projection_model_coefs.json", "fl_ra9_model_coefs.json", "position_player_pitchers.parquet", "fl_hitter_bridge_coefs.json", "fl_hitter_milb_prospects.parquet", "fl_hitter_milb_history.parquet",
             "fl_hitter_pioneer_prospects.parquet", "fl_hitter_pioneer_history.parquet", "fl_hitter_college_prospects.parquet", "fl_hitter_college_history.parquet", "ros_hitters_2026.parquet", "ros_pitchers_2026.parquet",
             "fl_college_prospect_lookup.parquet", "fl_college_prospect_projections.parquet", "fl_pioneer_prospect_lookup.parquet", "fl_pioneer_prospect_projections.parquet",
             "fl_milb_prospect_lookup.parquet", "fl_milb_prospect_projections.parquet"]

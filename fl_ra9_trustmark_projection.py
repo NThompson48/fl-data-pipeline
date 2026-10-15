@@ -605,6 +605,9 @@ if __name__ == "__main__":
                        "from war_pitchers where game_type='reg_season'")
 
     ra9_model, ra9_train_ranges = fit_ra9_baseline_model(war)
+    import json
+    json.dump({"spec": RA9_SPEC_PROD, "params": {k: float(v) for k, v in ra9_model.params.items()}, "train_ranges": ra9_train_ranges, "runs_per_win": 10.706},
+              open("output/fl_ra9_model_coefs.json", "w"), indent=1)              # the dashboard's player page shows each input's share of the RA9 projection
     air_model = fit_air_trait_model(raw)
 
     # league-average fallbacks for ppf/ip_per_g_prior,
