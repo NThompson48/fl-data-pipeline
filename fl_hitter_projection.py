@@ -88,6 +88,7 @@ POS_N0, POS_RESID_PER_PA = 100.0, 6.0 / 600
 # war_players.bsr_runs (fl_bsr_proxy.py), NOT the player's own record; WAR backtest -> 2026: RMSE 1.374 -> 1.348, MAE 1.124 -> 1.098 (fl_bsr_proxy_validation.py).
 WAR_INCLUDE_FIELDING = False
 WAR_INCLUDE_BASERUNNING = True
+POS_DH_GROUP = True                  # position adjustment shrinks DHs (>= 50% of 2026 PA at DH) toward the DH group, not the fielding position they are filed under (user 2026-10-14)
 GAP_PA, GAP_P_RETURN = 166.0, 0.065         # hitters whose last season is 2025: median PA of the 26 who came back (of 402), return rate
 N_SIM = 3000
 # informative playing time (user 2026-10-12): corr(standardised season wOBA error, PA residual) in the 2025 -> 2026 backtest, 2-fold cross-fit (fl_informative_pt_test.py,
@@ -270,15 +271,21 @@ def build_projections(p, fit):
     # --- WAR parts per PA --------------------------------------------------------------------------------------------
     t26w = p[(p["year"] == 2026) & (p["source"] == "trackman")]
     rpw = float((t26w["rar"] / t26w["war"].replace(0, np.nan)).median()); repl = float((t26w["repl_runs"] / t26w["pa"]).median())
-    pos_group = (t26w.groupby("primary_pos")["pos_adj_runs"].sum() / t26w.groupby("primary_pos")["pa"].sum())
-    d["pos_group_rate"] = d["primary_pos"].map(pos_group).fillna(0.0)
+    # POSITION ADJUSTMENT from 2026 only (user 2026-10-14: "Use 2026 only for adjustments"; war_players 2025 pos_adj_runs / dh_pa / pos_innings are broken): his own 2026
+    # rate shrunk toward his group's (POS_N0); group = DH when >= 50% of his 2026 PA came at DH (as for baserunning), else his 2026 primary position.  No 2026 row -> group
+    # (his panel position, else 0).  The same table serves the backtests (fl_hitter_pre2026.build_shifted), which therefore see 2026 roles.
+    pt = bsr_proxy.positions(2026); pt = pt[pt["pos_adj"].notna()]
+    grp_lab = pt["pos"] if POS_DH_GROUP else pt["field_pos"]
+    pos_group = pt.groupby(grp_lab)["pos_adj"].sum() / pt.groupby(grp_lab)["pa"].sum()
+    d["adj_pos"] = d["name_clean"].map(grp_lab).fillna(d["primary_pos"])
+    d["pos_group_rate"] = d["adj_pos"].map(pos_group).fillna(0.0)
     fld_rate = d["fielding_runs"].fillna(0) / d["pa_t"]
     d["fld_rate"] = fld_rate * d["pa_t"] / (d["pa_t"] + FLD_N0)
     d["fld_measured"] = d["primary_pos"].isin(FLD_MEASURED_POS)                           # OF / C (catcher framing); infielders and unknown positions: not measured
     of = t26w[t26w["primary_pos"].isin(("LF", "CF", "RF")) & (t26w["pa"] >= 150)]; r_of = of["fielding_runs"].fillna(0) / of["pa"]
     d["fld_sd_rate"] = np.where(d["fld_measured"], FLD_RESID_PER_PA, float(np.sqrt(np.average((r_of - np.average(r_of, weights=of["pa"])) ** 2, weights=of["pa"]))))
-    own_pos = d["pos_adj_runs"] / d["pa_t"]
-    d["pos_rate"] = np.where(d["gap"], d["pos_group_rate"], (d["pa_t"] * own_pos + POS_N0 * d["pos_group_rate"]) / (d["pa_t"] + POS_N0))
+    pa_pos = d["name_clean"].map(pt["pa"]); own_pos = d["name_clean"].map(pt["pos_adj"]) / pa_pos
+    d["pos_rate"] = np.where(own_pos.notna(), (pa_pos * own_pos + POS_N0 * d["pos_group_rate"]) / (pa_pos + POS_N0), d["pos_group_rate"])
     d["bat_rate"] = (d["proj_woba"] - lgw) / SC
     d["repl_rate"] = repl
     bm = bsr_proxy.production_model()                                                    # baserunning runs per PA from position incl. DH (2026 bsr_runs)
@@ -366,7 +373,7 @@ def main(publish: bool):
     keep = ["name_clean", "hitter", "team", "primary_pos", "side", "last_season", "gap", "pa_t", "proj_pa", "p_return",
             "proj_k", "proj_k_reg", "k_bridge_dev", "k_bridge_term", "whiff_term", "whiff_swing_pct", "swings", "proj_bbr", "proj_bbr_reg", "swing_term", "swing_pct_pool", "pitches_seen", "proj_hrr", "proj_babip", "proj_hbpr", "woba_direct", "woba_comp", "xwoba", "xwoba_shrunk", "proj_woba", "proj_woba_base", "proj_woba_xw", "ev90_term", "ev90_pool", "bbe_pool", "lg_woba", "proj_wrc_plus",
             "proj_woba_mis", "wrc_plus_mis", "mis_woba_shift", "proj_k_mis", "proj_bbr_mis", "proj_hrr_mis", "mis_park_fit_runs", "proj_air_per_pa", "air_pct_shrunk",
-            "bat_rate", "fld_rate", "fld_measured", "pos_rate", "bsr_rate", "bsr_pos", "repl_rate", "rar_per600", "war_per600", "rpw", "repl_per_pa",
+            "bat_rate", "fld_rate", "fld_measured", "pos_rate", "adj_pos", "bsr_rate", "bsr_pos", "repl_rate", "rar_per600", "war_per600", "rpw", "repl_per_pa",
             "proj_war", "proj_war_p10", "proj_war_p50", "proj_war_p90", "p_war_pos", "proj_war_mis", "proj_war_mis_p10", "proj_war_mis_p90", "p_war_pos_mis",
             "avg_ev", "ev90", "max_ev", "barrel_pct", "hardhit_pct", "sweetspot_pct", "pull_air_pct", "gb_pct", "whiff_pct", "chase_pct", "zswing_pct", "zcontact_pct", "swing_pct", "xdamage",
             "woba_raw", "woba_n"]

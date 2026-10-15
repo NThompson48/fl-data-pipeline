@@ -87,7 +87,10 @@ def hitter_snapshot(T_h, year, asof, wfit, delta_seasons, mis_share=0.5):
     grp = cur_pos.groupby("primary_pos")["pos_adj_runs"].sum() / cur_pos.groupby("primary_pos")["pa"].sum()
     pos_lab = cur_pos["primary_pos"].reindex(f.index)
     fld = (prev["fielding_runs"].fillna(0) / prev["pa"].replace(0, np.nan)).fillna(0) * prev["pa"].fillna(0) / (prev["pa"].fillna(0) + FLD_N0)
-    pos = pos_lab.map(grp).fillna(0.0)
+    import fl_bsr_proxy as _bp0, fl_hitter_projection as _hp0
+    pt = _bp0.positions(2026); pt = pt[pt["pos_adj"].notna()]; glab = pt["pos"] if _hp0.POS_DH_GROUP else pt["field_pos"]
+    grp = pt.groupby(glab)["pos_adj"].sum() / pt.groupby(glab)["pa"].sum()                 # 2026 group rates, DH its own group (as the preseason projection)
+    pos = pd.Series(f.index, index=f.index).map(glab).fillna(pos_lab).map(grp).fillna(0.0)
     t26 = cur_pos; rpw = float((t26["rar"] / t26["war"].replace(0, np.nan)).median()); repl = float((t26["repl_runs"] / t26["pa"]).median())
     import fl_hitter_projection as _hp
     fld_w = fld if _hp.WAR_INCLUDE_FIELDING else fld * 0.0                     # production WAR = batting + position + baserunning proxy + replacement (user 2026-10-13 / 14)

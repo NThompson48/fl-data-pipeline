@@ -4588,3 +4588,16 @@ SHIPPED (same day): rebuilt (run_all --from 7) and published.  Projected WAR eff
   proj_woba_xw so the wOBA steps sum.
   Pitchers: K% / BB% / RA9 each from the average pitcher plus coefficient x (his input - average); WAR from replacement RA9, runs saved over projected IP.  RA9 coefficients
   are exported (output/fl_ra9_model_coefs.json, in the publish MANIFEST).  tests/test_data.py checks every step sums to the projection (49 tests pass).
+
+### 2026-10-14 -- Position adjustment from 2026 only, DH as its own group; 2025 published WAR hidden (fl_pos_dh_group_test.py)
+FINDING: war_players 2025 position adjustments are broken (dh_pa puts 89% of PA at DH, pos_innings ~0.22 per PA vs 1.77 in 2026; pos_adj_runs per 600 PA: most hitters -2.8,
+a few +21; only 83 rows with a position).  Production never read them (2027 projections use 2026), but the backtest harness (build_shifted: real 2025 = latest season) did,
+and the dashboard showed 2025 published WAR.
+USER: "Don't show 2025 Published WAR" / "Use 2026 only for adjustments" / "DHs?".
+CHANGES: (1) dashboard history: published WAR shown for 2026 only.  (2) Position adjustment = own 2026 war_players pos_adj_runs per PA shrunk (POS_N0 100) toward his
+2026 group; production, ROS and the backtests all read this one table (fl_bsr_proxy.positions(2026)), so backtests now see 2026 roles (accepted).  (3) DH = its own group
+(>= 50% of 2026 PA at DH, the baserunning rule; POS_DH_GROUP); DH-only cameos, previously 0, now get the DH rate (about -11 runs / 600 PA).
+REPORT (WAR backtest -> 2026, 146 hitters, both with the 2026 table): listed-position group -> DH group: RMSE 1.3188 -> 1.3186 (-0.0002, 90% [-0.0035, +0.0037], P .56);
+MAE 1.0643 -> 1.0637 (-0.0006, [-0.0043, +0.0033], P .60); DH mean error +0.21 -> +0.11 WAR.  Neutral overall, less DH bias -> kept.  Backtest level with 2026 adjustments
+1.319 / 1.064 vs 1.348 / 1.098 with the broken 2025 ones (partly role leak: the target season's positions).
+"Fielding runs position adjustment": the positional adjustment is (and stayed) in WAR; only individual fielding runs are out.

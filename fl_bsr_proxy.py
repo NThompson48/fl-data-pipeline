@@ -48,13 +48,14 @@ def bio():
 
 @functools.lru_cache(maxsize=None)
 def positions(year=2026):
-    """name_clean -> baserunning position for a season: DH if >= DH_SHARE of PA at DH, else war_players.primary_pos (row with more PA); also returns pa and bsr."""
+    """name_clean -> position for a season: DH if >= DH_SHARE of PA at DH, else war_players.primary_pos (row with more PA); also pa, bsr, pos_adj (published position runs)."""
     from sqlalchemy import text
     from fl_supabase import read_sql_df
-    w = read_sql_df(text(f"select player, pa, dh_pa, bsr_runs, primary_pos from war_players where game_type = 'reg_season' and year = {int(year)} and pa > 0"))
+    w = read_sql_df(text(f"select player, pa, dh_pa, bsr_runs, pos_adj_runs, primary_pos from war_players where game_type = 'reg_season' and year = {int(year)} and pa > 0"))
     w["name_clean"] = w["player"].map(_clean_lastfirst)
     pos = w.sort_values("pa").groupby("name_clean")["primary_pos"].last()
-    d = w.groupby("name_clean").agg(pa=("pa", "sum"), dh_pa=("dh_pa", "sum"), bsr=("bsr_runs", lambda x: x.sum(min_count=1))).join(pos.rename("field_pos"))
+    d = w.groupby("name_clean").agg(pa=("pa", "sum"), dh_pa=("dh_pa", "sum"), bsr=("bsr_runs", lambda x: x.sum(min_count=1)),
+                                    pos_adj=("pos_adj_runs", lambda x: x.sum(min_count=1))).join(pos.rename("field_pos"))
     d["dh_share"] = d["dh_pa"] / d["pa"]; d["pos"] = np.where(d["dh_share"] >= DH_SHARE, "DH", d["field_pos"]); return d
 
 
