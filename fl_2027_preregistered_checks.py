@@ -29,14 +29,13 @@ CHECKS = {
         "test": "mean error (actual - projected wOBA); pooled with the four earlier transitions", "success": "apply the +.0046 step if the 5-transition interval excludes 0"},
     "C5 pitcher P(WAR>0) calibration by projected IP": {"type": "calibration", "groups": ["< 22 projected IP", "22-45", "45+"],
         "success": "predicted mean inside each group's 90% Wilson interval; the < 22 group was ~7 points optimistic in 2026"},
-    "C6 hitter WAR range coverage": {"type": "calibration", "test": "share of realised 2027 WAR (batting + position + replacement) inside the 50 / 80 / 90% ranges",
-        "success": "each within 2 binomial SE of nominal"},
-    "C7 baserunning persistence": {"type": "data", "test": "2026 -> 2027 correlation of published baserunning runs per PA (>= 150 PA both years) and the shrunk term's held-out RMSE",
-        "success": "decides whether baserunning returns to WAR (currently out of production)"},
+    "C6 hitter WAR range coverage": {"type": "calibration", "test": "share of realised 2027 WAR (batting + position + baserunning proxy + replacement) inside the 50 / 80 / 90% ranges", "success": "each within 2 binomial SE of nominal", "amended": "2026-10-14 (before any 2027 data): WAR definition now includes the baserunning proxy (user decision 2026-10-14)"},
+    "C7 baserunning persistence": {"type": "confirmation (baserunning proxy IN production since 2026-10-14)", "test": "held-out 2027 baserunning runs per PA (war_players.bsr_runs): (a) production proxy = 2026 position average incl. DH (fl_bsr_proxy, frozen 2026 effects) vs (b) league mean vs (c) own 2026 rate shrunk toward the proxy (n0 300 PA); plus the 2026 -> 2027 correlation of runs per PA (>= 150 PA both years)", "success": "keep the proxy if it beats (b) on RMSE and MAE with P(better) >= .90; switch to (c) if (c) beats the proxy on both with P(better) >= .90", "amended": "2026-10-14 (before any 2027 data): was 'decides whether baserunning returns to WAR'; baserunning entered WAR as a position proxy"},
     "C8 Trustmark surfaces": {"type": "validation", "test": "2027 balls at Trustmark (visitors + Mississippi at home): observed (wOBA - xwOBA) and HR vs the 2025-26 surface predictions, per hitter and overall",
         "success": "calibration slope interval contains 1; level inside the 2025-26 bootstrap range"},
     "C9 fielding / position with two tracked seasons": {"type": "data", "test": "2026 -> 2027 persistence of fielding runs by position (infield if the data exist) and of position runs",
-        "success": "decides whether fielding returns to WAR (currently out of production)"},
+        "success": "decides whether fielding returns to WAR (currently out of production)", "metric_spec": "fl_fielding_part_2026.py as of 2026-10-14 (PART-style infield runs: per-position x set boosted out models on ball + starting position, cross-fitted by game, multi-fielder credit, P/C term, centred within position, no speed proxy); success = 2026->2027 correlation of runs per opportunity and pooled full-time reliability >= .40 -> shrunk term enters WAR",
+        "test_position": "POSITION RUNS (in production): own 2026 rate shrunk toward the 2026 group (DH = >= 50% of PA at DH) with n0 = 100 PA and a 6.0 runs / 600 PA residual in the WAR simulation, neither validated (one season of real positions).  Test on 2027 position runs per PA: n0 grid (0, 50, 100, 200, group only) and the realised residual SD; success = adopt the held-out-best n0 / residual if it beats 100 / 6.0 on RMSE and MAE with P(better) >= .90", "amended": "2026-10-14 (before any 2027 data): added the position-runs shrinkage / residual test"},
 }
 
 

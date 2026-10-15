@@ -4601,3 +4601,12 @@ REPORT (WAR backtest -> 2026, 146 hitters, both with the 2026 table): listed-pos
 MAE 1.0643 -> 1.0637 (-0.0006, [-0.0043, +0.0033], P .60); DH mean error +0.21 -> +0.11 WAR.  Neutral overall, less DH bias -> kept.  Backtest level with 2026 adjustments
 1.319 / 1.064 vs 1.348 / 1.098 with the broken 2025 ones (partly role leak: the target season's positions).
 "Fielding runs position adjustment": the positional adjustment is (and stayed) in WAR; only individual fielding runs are out.
+
+### 2026-10-14 -- How the position adjustment is built (reverse-engineered) and pre-registration amendments
+POSITION RUNS (war_players, built upstream; no builder code in this repo): fitted on 2026 rows, R2 .995, max miss 1.6 runs: FanGraphs constants x innings_scaled / 1458
+(C +12.7, SS +7.6, 2B +2.6, 3B +2.5, CF +2.4, LF -7.7, RF -7.5, 1B -12.9; scale 1.016) + DH -17.2 per 600 DH PA + a uniform +2.8 runs / 600 PA shift so the league sums to 0.
+innings_scaled corrects the ~8% tracking-coverage gap of non-catcher innings.  Constants are MLB conventions, not FL estimates (no infield fielding data to estimate them).
+NO MODEL CHANGE NEEDED from this: baserunning (position average) and position runs measure different things; replacement per PA + zero-sum position runs is the FanGraphs frame.
+STILL UNVALIDATED (known since 2026-10-08): position shrinkage n0 = 100 PA and the 6.0 runs / 600 PA residual -- one season of real positions.
+PRE-REGISTRATION AMENDED (before any 2027 data; frozen coefficients untouched): C6 WAR definition now includes the baserunning proxy; C7 rewritten to confirm the proxy
+(vs league mean; vs own 2026 rate shrunk toward the proxy, n0 300); C9 gains the position-runs n0 / residual test.  prereg/preregistered_2027.json carries an 'amendments' entry.
