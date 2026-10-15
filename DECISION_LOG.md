@@ -4567,3 +4567,17 @@ LF -0.5, 3B -1.7, C -3.2, DH -5.3; height +0.04 per inch, weight -0.28 per 10 lb
     DH mean error +0.81 -> +0.56 WAR, CF -0.38 -> -0.13, C +0.74 -> +0.63.
 CAVEAT: the backtest's "2025" positions are the 2026 positions copied back (lineup_stats has no real 2025 positions), so role is target-season in old and new alike.
 DECISION PENDING (user): baserunning proxy helps WAR either way; position-only (incl. DH) is as good or better than adding height + weight, which overfit.
+DECISION (user 2026-10-14, chose "Position + DH only (Recommended)"): hitter WAR = batting + position adjustment + BASERUNNING PROXY + replacement.  bsr_rate = the 2026 position
+average incl. DH (fl_bsr_proxy.PRODUCTION_FEATURES = ("pos",)); a hitter's own baserunning record is not used.  Position for the proxy: 2026 role (DH if >= 50% of PA at DH),
+else the projection's primary_pos; no position -> PA-weighted average position (about 0).  WAR simulation: baserunning runs = rate x PA + sqrt(PA^2 tau2 + PA noise) x z, with
+tau2 / noise the residual variance law around the proxy (true-talent spread it leaves + one season's noise).  ROS WAR uses the same term (the proxy is fit on full-season 2026,
+so in-season 2026 ROS snapshots see it -- display only).  Dashboard: WAR parts table gains a Baserunning row; WAR notes updated.  Replaces the unused shrunk-own-bsr code
+(BSR_N0 / BSR_TAU removed).
+
+### 2026-10-14 -- Baserunning proxy weighted by POSITION PLAYING TIME? (user: "Does weighting by position playing time help?") -> NO, keep the primary position (fl_bsr_proxy_ptweight_test.py)
+CANDIDATE: share_DH = dh_pa / pa, the rest split by 2026 innings per position (war_playing_time, pitcher innings dropped); bsr / PA = sum share x effect (WLS, PA weights).  327 of 377
+hitters (99% of PA) have time at 2+ spots incl. DH; median main-position share .79.  Mix effects are more extreme (CF +7.4, RF +4.4, DH -7.1 vs primary +5.8, +0.6, -5.8).
+PRE-STATED RULE: adopt only if held-out bsr RMSE improves vs the primary position with P(better) >= .8 AND the WAR backtest is not worse.
+(a) held-out 2026 bsr (10-fold x 20, frozen inverse-variance weights), runs per 600 PA: RMSE 9.291 -> 9.300 (+0.009, 90% [-0.116, +0.135], P(better) .44); MAE 6.519 -> 6.527 (+0.008, P .45).
+(b) WAR backtest (146): RMSE 1.3476 -> 1.3415 (-0.0062, [-0.0150, +0.0021], P .89); MAE 1.0983 -> 1.0957 (-0.0026, [-0.0114, +0.0061], P .68).
+DECISION: rule NOT met at (a) -> production stays on the primary position (incl. DH >= 50%).  The small WAR gain in (b) is within noise.
