@@ -4610,3 +4610,14 @@ NO MODEL CHANGE NEEDED from this: baserunning (position average) and position ru
 STILL UNVALIDATED (known since 2026-10-08): position shrinkage n0 = 100 PA and the 6.0 runs / 600 PA residual -- one season of real positions.
 PRE-REGISTRATION AMENDED (before any 2027 data; frozen coefficients untouched): C6 WAR definition now includes the baserunning proxy; C7 rewritten to confirm the proxy
 (vs league mean; vs own 2026 rate shrunk toward the proxy, n0 300); C9 gains the position-runs n0 / residual test.  prereg/preregistered_2027.json carries an 'amendments' entry.
+
+### 2026-10-14 -- Position-runs shrinkage estimated within 2026 (fl_pos_shrink_2026.py) -- decision pending
+METHOD: per-game position runs rebuilt from pbp_events (outs credited to each moment's C / 1B / 2B / 3B / SS / LF / CF / RF; DH PA = games never in his team's alignment),
+FanGraphs constants; check vs war_players.pos_adj_runs (266 hitters >= 50 PA): scale 1.021, DH -15.8 per 600, R2 .985, max miss 1.9 runs.  First-half own rate / group
+(DH >= 50% PA) predict second-half position runs per PA (>= 50 PA each half); frozen inverse-variance weights; n0 grid; player bootstrap.
+CHRONOLOGICAL halves (split 2026-07-12, 178 hitters; group changed for 22%): RMSE per 600 PA n0 0 2.77, 25 2.81, 50 2.86, 100 2.95, 200 3.09, group only 3.58; best n0 0
+(90% 0-20).  n0 100 -> 0: RMSE 2.954 -> 2.770 (-0.184, [-0.318, -0.051], P .99); MAE 2.003 -> 1.913 (-0.090, [-0.197, +0.016], P .92).  Role-change spread 2.7 runs / 600 PA
+(simulation uses 6.0).
+ALTERNATING games (236; pure sampling): best n0 20 (10-30); n0 100 -> 20 RMSE 1.600 -> 1.370, MAE 1.064 -> 0.880 (P 1.0); spread 0.6.
+CAVEAT: between-season role change (signings, trades, aging) is larger than within-season, so these n0 / spread values are LOWER bounds for a season-ahead projection.
+IMPACT on 2027 projections: n0 100 -> 0: mean |dWAR| .033 (max .27); -> 25: .015 (max .10); -> 50: .008 (max .05).
