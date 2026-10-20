@@ -4624,3 +4624,23 @@ IMPACT on 2027 projections: n0 100 -> 0: mean |dWAR| .033 (max .27); -> 25: .015
 DECISION (user 2026-10-14): POS_N0 100 -> 25; residual 6.0 kept.  Rest of season now uses the same own-rate blend (was group only).  WAR backtest (146; own role = target season,
 flatters low n0): RMSE 1.3186 -> 1.3179 (-0.0007, [-0.0029, +0.0013], P .71); MAE 1.0637 -> 1.0634 (-0.0003, [-0.0024, +0.0015], P .62).  C9 text updated to n0 = 25.
 Rebuilt (run_all --from 7), published, 49 tests pass.
+
+### 2026-10-20 -- Stale tracking file refreshed; park surfaces / hitter ROS rebuilt; infield fielding metric RE-RUN on the full season
+FINDING: 2025_2026_pitches.parquet (hitting tracking, last pulled 2026-08-20) ended 2026-08-16 (757 games); the database has 2026 through 09-26 (regular season ends 09-06, 939 games; playoffs after).
+About 200 regular-season games (08-17 to 09-06) were missing.  Re-pulled with pull_2025_2026.py: 978 games / 294,877 rows (= database).  The file has no game_type column and includes
+playoff (23 games, 2.4% of 2026 pitches) and spring-training games, as it always has (2025 already contained playoffs) -- left as is; restricting the park surfaces to regular season
+would be a model change (open question to the user).
+NOT STALE (verified row-for-row vs the database): output/fl_raw_pitches_flagged.parquet (pitcher cache; reg_season only, so it correctly ends 09-06), output/hitter_bbe_2025_2026.parquet
+(EV90), output/hitter_pitches_2025_2026.parquet (Whiff% / Swing%).  Import trace: run_all steps 1-4 (panel, position flags, pitcher K/BB, RA9) never reach the refreshed file.
+Readers that matter: park surfaces (steps 5-6, via fl_hitter_park_surface.py), fl_fielding_part_2026.py and the ROS build (via fl_error_analysis_common).  An earlier statement that the
+hitter Whiff / Swing / EV90 and pitcher inputs were affected was wrong.
+REBUILD (run_all --from 5; old files in output/stale_data_backup_20261020/): pitcher outputs not rebuilt (inputs unchanged).  Hitter 2027 projections vs before: K% and BB% identical
+(park K / BB effects fixed at 0); park-neutral wOBA mean |change| .00008 (max .0008), HR/PA max .001, WAR mean |change| .0016 (max .012), proj PA max 2 (history is neutralised with the
+HR surface, so a refit surface nudges park-neutral numbers); Mississippi: wOBA shift mean change +.0014, park-fit runs mean |change| .14 (max .95, Spearman .95), MIS WAR mean |change| .011 (max .082).
+ROS snapshots changed slightly and evenly across as-of dates (ros_ra9 mean |change| about .012, wRC+ .003); the build is deterministic (run twice, identical) so the change is from the data;
+cause not isolated.  Published to the local dashboard data folder, 49 tests pass.
+FIELDING RE-RUN (same frozen spec, full data: 21,712 balls in play joined vs about 14.9k grounders + air before): all-infielder split-half r .163 -> .236 (90% .09-.38); full-time reliability .297 -> .410
+(rule >= .40: NOT met -> MET, by .01); by position 1B .41, 2B .20, 3B .46, SS .56 (n 22-33 each).  Range-only .367 -> .493 (r .305, 90% .15-.46; lower bound about .28); range + throw grounders only .398;
+throw only .05.  Team positioning bias unchanged (mean -14.3 runs per team).  The earlier "not met" and "range-only .37" came from incomplete data.
+DECISION: fielding stays OUT of WAR (user 2026-10-13: keep fielding out; the pre-registered decision point is 2026 -> 2027 persistence, C9).  The rule is met only narrowly and a within-season split half
+does not test year-to-year stability or validity (team positioning bias unresolved).  Range-only is now the stronger candidate (.49).  Options put to the user.
