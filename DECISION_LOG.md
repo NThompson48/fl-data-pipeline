@@ -4644,3 +4644,25 @@ FIELDING RE-RUN (same frozen spec, full data: 21,712 balls in play joined vs abo
 throw only .05.  Team positioning bias unchanged (mean -14.3 runs per team).  The earlier "not met" and "range-only .37" came from incomplete data.
 DECISION: fielding stays OUT of WAR (user 2026-10-13: keep fielding out; the pre-registered decision point is 2026 -> 2027 persistence, C9).  The rule is met only narrowly and a within-season split half
 does not test year-to-year stability or validity (team positioning bias unresolved).  Range-only is now the stronger candidate (.49).  Options put to the user.
+
+### 2026-10-20 -- BP RDA-style test (fl_fielding_rda_style_2026.py): ball-only vs start-position features, depth 1-4, two split schemes -- exploratory, nothing adopted
+SOURCE: baseballprospectus.com articles 80209 (Range Defense Added, 2023) and 99395 (infield RDA update, 2025): no fielder start positions (ball only), Attempt Range for all infielders,
+shallow physics model ("accurate but not too accurate"), judged on team-switcher year-to-year reliability.  Their updated MLB infield mean: .35 (team-switchers, year to year; harsher than our within-season split).
+DESIGN (fixed before running): 2026 grounders (18,584 of 21,712 joined balls in play, full season), per-position boosted trees cross-fit by game, feature set "start" (ball + starting angle / depth: PART) vs
+"ball" (exit speed, launch angle, direction, side, distance, hang time), depth 1-4 (250 iterations, 40 per leaf), components REACH / CONVERT / TOTAL, full-time reliability from ALT (alternating games) and
+CHRON (first vs second half of the season) splits.  Rule: ball counts as better only if it beats start by > .05 under BOTH splits at the same depth (REACH and TOTAL, all infielders).
+RESULTS (all infielders, full-time reliability, alt / chron):  REACH start 1-4: .42/.01, .52/.00, .55/.06, .55/.13; ball: .51/.28, .55/.35, .58/.42, .59/.48.  TOTAL start: .36/.37, .38/.25, .40/.25, .43/.31;
+ball: .43/.48, .44/.49, .47/.49, .47/.48.  CONVERT (success on fielded plays): .13-.27 for both.  Depth-4 intervals (90%): start reach .55 (.36-.68) alt, .13 (0-.34) chron (n 107 / 76);
+ball reach .59 (.39-.72), .48 (.22-.66); start total .43 (.15-.62), .31 (.02-.51); ball total .47 (.27-.62), .48 (.18-.65).
+RULE VERDICT: TOTAL: ball beats start under both splits at depths 1-3 (alt +.07 / +.06 / +.07, chron +.11 / +.24 / +.24), not at depth 4 (alt +.04); REACH: both-split margin > .05 only at depth 1 (alt +.09); at 2-4 alt margin +.03-.04.
+READINGS: (1) BP's shallow-model finding does NOT reproduce here (depth 1 -> 4 never lowers reliability; alt reliability rises with depth; deeper than 4 untested).  (2) The start-position RANGE metric (our PART
+reach component) collapses when the halves are separated in time (chron .00-.13 vs alt .42-.55): the alternating-game reliabilities that passed the pre-stated .40 rule overstate stability across time (the rule
+was alt-based and is formally met).  Ball-only is far steadier across time (.28-.48).  Cause not identified (changes in alignments / roles / opponents within the season are candidates).
+(3) Team clustering of fielder estimates (between-team variance vs a permutation null): none in any config (ratio .71-.98, p .50-.85); low power (18 teams).  Team-switchers in 2026: n = 4, unusable.
+MISSISSIPPI (user: our team positions more specifically): infield starting-position depth varies by batter more consistently than any other team (rank 1 of 18) and the spread of starting angles is the largest
+(rank 1; the cross-half angle correlation is about .95 for every team because all teams position by handedness).  Team positioning value (PART): +24.3 runs vs the league mean (SE 6.5, game-cluster bootstrap),
+2nd of 18 with Quebec +24.7; includes home-park effects, and the level is biased low (about -14 per team).  Team credit under ball-only minus start-conditioned scoring (depth 4) correlates .93 with team
+positioning runs across the 18 teams: Quebec +24.6, New Jersey +15.3, Mississippi +14.3 ... Florence -23.7 -> ball-only scoring hands a team's positioning to its fielders.  Mississippi's infielders total
+-26.7 runs on the start-conditioned basis vs -12.5 ball-only (no interval computed).
+DECISION: no change to production (fielding stays out of WAR).  For Mississippi's own fielders the start-conditioned scoring is the right frame (positioning is a team decision here); ball-only is steadier but
+partly measures coaching.  Open: whether the start-conditioned range instability is real before relying on it; test again with 2027 (C9) on a year-to-year basis.
