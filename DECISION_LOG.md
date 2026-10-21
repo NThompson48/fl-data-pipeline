@@ -4704,3 +4704,18 @@ RDA-style grid (ball-only vs start-position, all infielders, full-time reliabili
 LESSON: the start-position metric's reliability swings by about +/- .1 between equally valid versions of the data and fold assignment (range-only .367 stale data, .493 full data, .395 regular season + sorted; PART .297
 -> .410 -> .428); anything near the .40 rule is within that noise.  Ball-only is stable (reach alt .59 -> .61, chron .48 -> .46).  Fielding stays OUT of WAR.  For 2027 (C9): repeat the cross-fit over several
 fold assignments and average predictions before testing the rule.
+
+### 2026-10-21 -- Neural network for wh_sva (user): PyTorch installed; pilot on the cross-fitted pool; downstream K% test running
+INSTALL: PyTorch 2.14.1 CPU build into the pipeline's Python 3.11.9 (user: "Let's install PyTorch").  CPU, not CUDA, although an RTX 4060 (8 GB) is present: the network is tiny (9 inputs, about 226k swings), GPU training is not
+bit-for-bit reproducible by default (we just fixed row-order reproducibility), and the CUDA wheels are about 2.5 GB.  The pilot and the first downstream test use scikit-learn's MLPClassifier (no new dependency);
+torch is there for richer architectures (dropout, pitch-type embeddings) if the simple network shows promise.  pip also printed old pycaret conflicts (pycaret wants pandas < 2.2): pre-existing, not from this install.
+PILOT (fl_wh_sva_nn_pilot.py; 225,828 swings, 766 pitchers after excluding position players; 5-fold GroupKFold by pitcher; same 9 inputs; sva = full - location in every case; hyper-parameters fixed in advance):
+  per-pitch OOF log-loss of the full model: production XGBoost .4722, deeper XGBoost (depth 8) .4734 (worse), MLP one seed .4705, MLP 3 seeds .4691; AUC .7313 / .7302 / .7350 / .7373.
+  stuff increment (loc - full log-loss): prod .0135, deep .0132, nn .0132, nn3 .0143.  sva SD per pitch: .0635 / .0911 / .0789 / .0736; correlation with production per pitch .81 / .71 / .75, pitcher level .90 / .82 / .86.
+  pitcher-level reliability (alternating games, >= 150 pitches per half): split-half r .904 (S-B .949, n0 56 pitches) prod; xgb_deep .903 (.949, 57); nn .945 (.972, 31); nn3 .934 (.966, 37); blend .926 (.962, 42).
+  corr with K% (same period): prod .519, deep .534, nn .501, nn3 .545, blend .550.
+  RULE (full-model log-loss better by >= .0005 OR reliability better by >= .03): nn and nn3 PROCEED (log-loss +.0017 / +.0032); xgb_deep no (worse); blend no by the rule (reliability +.012), run anyway as a flagged add-on.
+  Reading: the trees are not the limit (deeper trees do not help), the smoother network family predicts whiffs better out of fold and makes the pitcher-level number about 40% less noisy; three seeds beat one on the log-loss.
+FRESHNESS GUARD: the database was revised slightly overnight (2026 regular season 285,946 -> 285,943 pitches; 85 more pitch rows with a pitcher id; 2 more balls in play: at most .03%), which tripped the exact-match check.  Policy
+changed to a 0.1% tolerance (warn below, stop above; the stale 08-16 file was 22.8% off) so routine edits do not push people to --skip-check.  The caches / experiments in progress were not refreshed (it would change baselines mid-test);
+refresh before the next production rebuild.

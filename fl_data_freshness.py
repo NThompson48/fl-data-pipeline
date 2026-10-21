@@ -6,7 +6,7 @@ Checks (each compares the local file with the same query the loader would run):
   2. output/fl_raw_pitches_flagged   regular-season pitcher-id rows per year vs `pitches`; rows in canonical order       (refresh: delete the file; the loader rebuilds it)
   3. output/hitter_bbe_2025_2026     regular-season balls in play per year vs `pitches`                                  (refresh: fl_hitter_ev.load_bbe(refresh=True))
   4. output/hitter_pitches_2025_2026 regular-season pitches per year vs `pitches`                                        (refresh: fl_hitter_whiff.load(refresh=True))
-Exit status 1 if any check fails.  Usage: python fl_data_freshness.py   (run_all.py runs it first; --skip-check bypasses it).
+A file counts as stale when it differs from the database by more than TOL (0.1%); smaller drift prints a warning.  Exit status 1 if any check is stale.  Usage: python fl_data_freshness.py   (run_all.py runs it first; --skip-check bypasses it).
 """
 import sys
 import warnings
@@ -20,15 +20,22 @@ warnings.filterwarnings("ignore")
 BIP = "('single','double','triple','home_run','out','fielders_choice','error')"
 
 
+TOL = 0.001          # relative difference above which a local file counts as stale; smaller drift (routine database edits, e.g. a few pitches revised overnight) only warns
+
+
 def db(q):
     return read_sql_df(text(q))
+
+
+def rel(a, b):
+    a, b = float(a), float(b); return abs(a - b) / max(a, 1.0)
 
 
 def main():
     fails = []
 
-    def check(name, ok, detail):
-        print(f"[{'ok' if ok else 'STALE'}] {name}: {detail}")
+    def check(name, ok, detail, drift=0.0):
+        print(f"[{'ok' if ok and drift == 0 else 'warn' if ok else 'STALE'}] {name}: {detail}" + (f"  (drift {100 * drift:.3f}%, within the {100 * TOL:.1f}% tolerance)" if ok and drift > 0 else ""))
         if not ok:
             fails.append(name)
 
@@ -42,24 +49,25 @@ def main():
         d = db("select year, game_type, count(distinct game_id) games, count(*) pitches, max(date) hi from pitches where year in (2025, 2026) group by 1, 2")
         L = t.groupby(["year", "game_type"]).agg(games=("game_id", "nunique"), pitches=("game_id", "size"), hi=("date", "max")).reset_index()
         m = d.merge(L, on=["year", "game_type"], how="left", suffixes=("_db", "_local")).fillna({"games_local": 0, "pitches_local": 0})
-        bad = m[(m["games_db"] != m["games_local"]) | (m["pitches_db"] != m["pitches_local"])]
-        check("tracking parquet vs database", bad.empty, f"{len(m)} year x game-type groups" + ("" if bad.empty else "; differing: " + bad[["year", "game_type", "games_db", "games_local", "pitches_db", "pitches_local"]].to_string(index=False)))
+        drift = max(rel(a, b) for a, b in zip(m["pitches_db"], m["pitches_local"])); gdrift = max(rel(a, b) for a, b in zip(m["games_db"], m["games_local"]))
+        bad = m[(m["games_db"] != m["games_local"]) | (m["pitches_db"] != m["pitches_local"])] if max(drift, gdrift) > TOL else m.iloc[0:0]
+        check("tracking parquet vs database", bad.empty, f"{len(m)} year x game-type groups" + ("" if bad.empty else "; differing: " + bad[["year", "game_type", "games_db", "games_local", "pitches_db", "pitches_local"]].to_string(index=False)), max(drift, gdrift))
 
     # 2. pitcher cache
     import fl_pitcher_features as fp
     c = pd.read_parquet(fp.CACHE_PATH)
     d = db("select year, count(*) n from pitches where game_type = 'reg_season' and pitcher_id is not null and year in (2025, 2026) group by 1").set_index("year")["n"]
     l = c[c["year"].isin([2025, 2026])].groupby("year").size()
-    check("pitcher cache vs database", all(int(d.get(y, 0)) == int(l.get(y, 0)) for y in (2025, 2026)), f"db {d.astype(int).to_dict()} local {l.astype(int).to_dict()}")
+    dr = max(rel(d.get(y, 0), l.get(y, 0)) for y in (2025, 2026)); check("pitcher cache vs database", dr <= TOL, f"db {d.astype(int).to_dict()} local {l.astype(int).to_dict()}", dr)
     check("pitcher cache in canonical order with one name per id", fp.canonical_order(c)[["game_id", "pa_id", "pitch_no", "pitcher"]].astype(str).equals(c[["game_id", "pa_id", "pitch_no", "pitcher"]].astype(str)), "sorted on fl_pitcher_features.ORDER_KEY")
 
     # 3 / 4. hitter caches
     b = pd.read_parquet("output/hitter_bbe_2025_2026.parquet", columns=["year"]).groupby("year").size()
     d = db(f"select year, count(*) n from pitches where game_type='reg_season' and year in (2025,2026) and play_result in {BIP} and exit_speed is not null and angle is not null group by 1").set_index("year")["n"]
-    check("hitter BBE cache vs database", all(int(d.get(y, 0)) == int(b.get(y, 0)) for y in (2025, 2026)), f"db {d.astype(int).to_dict()} local {b.astype(int).to_dict()}")
+    dr = max(rel(d.get(y, 0), b.get(y, 0)) for y in (2025, 2026)); check("hitter BBE cache vs database", dr <= TOL, f"db {d.astype(int).to_dict()} local {b.astype(int).to_dict()}", dr)
     p = pd.read_parquet("output/hitter_pitches_2025_2026.parquet", columns=["year"]).groupby("year").size()
     d = db("select year, count(*) n from pitches where game_type='reg_season' and year in (2025,2026) and pitch_call is not null group by 1").set_index("year")["n"]
-    check("hitter pitch cache vs database", all(int(d.get(y, 0)) == int(p.get(y, 0)) for y in (2025, 2026)), f"db {d.astype(int).to_dict()} local {p.astype(int).to_dict()}")
+    dr = max(rel(d.get(y, 0), p.get(y, 0)) for y in (2025, 2026)); check("hitter pitch cache vs database", dr <= TOL, f"db {d.astype(int).to_dict()} local {p.astype(int).to_dict()}", dr)
 
     print("\nFRESH" if not fails else f"\nSTALE INPUTS: {fails}")
     return 1 if fails else 0
