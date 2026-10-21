@@ -4666,3 +4666,17 @@ positioning runs across the 18 teams: Quebec +24.6, New Jersey +15.3, Mississipp
 -26.7 runs on the start-conditioned basis vs -12.5 ball-only (no interval computed).
 DECISION: no change to production (fielding stays out of WAR).  For Mississippi's own fielders the start-conditioned scoring is the right frame (positioning is a team decision here); ball-only is steadier but
 partly measures coaching.  Open: whether the start-conditioned range instability is real before relying on it; test again with 2027 (C9) on a year-to-year basis.
+
+### 2026-10-20 -- 2025 fielder data: what exists (StatsCrew, fl.turinglytics.com) -- feasibility check, nothing pulled in bulk
+QUESTION (user): can the ball-only (RDA-style) metric be run for 2025 without fielder starting positions?  The method does not need starting positions but does need WHO FIELDED each ball (or who
+played each infield spot that game).  2025 tracking has the ball physics for about 20k grounders but fielded_by / fielded_by_pos / names are 0% filled (2026: 86-88% / 97%); pbp_events starts in 2026;
+war_players 2025 position columns are broken.  No other database table has 2025 per-game alignment.
+SOURCES CHECKED: (1) StatsCrew team-year pages (robots: crawl delay 5 s) carry a FIELDING table per player x position for 2025: GP, PO, A, E, DP, Fld%, RF/G -- season level only, no per-game pages.
+Useful for games-by-position (a real 2025 position-adjustment basis; would let n0 / role-change spread be tested season to season); not enough to credit plays.  (2) fl.turinglytics.com (the league's stats
+site; robots: Allow /, Disallow /api/, no crawl delay; documented public API v1 is 2026-only and season-level): /gamelogs/<Season>/gamelog_<id>.txt are static Pointstreak box scores + FULL PLAY-BY-PLAY
+for 2025.  Box score = both lineups with each player's defensive position; play-by-play = scoring notation on outs (first digit = fielder: "5-3", "6-3", "4-3", "3-1", "L4", "P2", "4-3 DP"),
+hits with a location only sometimes ("single to center field" vs plain "single"), fly outs by field.  One-game test (2025-06-14 Mississippi at Schaumburg, id 621967): 66 of 74 PA matched to tracking
+(inning + batter + order); scored fielders agree with the tracked ball direction (3B -15 to -32 deg, SS -1 to -21, 2B +8 to +24, 1B +56 to +63).
+LIMITS: plain "single" has no fielder (infield-hit "reach" credit missing in 2025; outs and located hits are fine); mid-game defensive changes need the lineup / substitution lines; the Pointstreak id of each
+game is not in our database -- the site lists ids through an internal endpoint (/api/fl/historical/games_by_date) that robots.txt disallows for crawlers.
+STATUS: no bulk requests made (one static file fetched for the probe).  Waiting on the user's call on how to obtain the 2025 game-id list.
