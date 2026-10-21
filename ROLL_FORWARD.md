@@ -24,5 +24,14 @@ read these.
 Supabase tables (lineup_stats, pitches, war_players, advanced_splits, war_pitchers), the tracking file
 `2025_2026_pitches.parquet` (add 2027), MiLB / Pioneer / college source tables (Pioneer: rerun `pull_statscrew_pioneer_batting.py` with the new season in its year range; college: FanGraphs exports into input/fangraphs_college/).
 
+## 3b. Data hygiene rules (added 2026-10-20)
+- **Freshness is checked automatically.** `run_all.py` first runs `fl_data_freshness.py`, which compares the tracking parquet, the pitcher cache and the two hitter caches with the database and stops if any is stale
+  (the tracking parquet had been left 3 weeks behind the season).  Refresh with `python pull_2025_2026.py`, delete `output/fl_raw_pitches_flagged.parquet`, or `fl_hitter_ev.load_bbe(refresh=True)` / `fl_hitter_whiff.load(refresh=True)` as the message says.
+- **Row order is fixed on load.** The database returns rows in arbitrary order and results depended on it (pitcher ROS: mean .013 RA9; one pitcher's innings moved 41).  `pull_2025_2026.py` sorts on (game_id, pitch_uid) and
+  `fl_pitcher_features.canonical_order` sorts the pitcher cache on `ORDER_KEY`.  Any new loader that feeds cross-validation or first-row picks should sort too.
+- **One name per pitcher_id.** `fl_pitcher_features.harmonize_names` keeps the most frequent spelling (3 ids carried two).  Name-keyed tables (war_pitchers) need an alias when the spellings are the same person
+  (`PITCHER_NAME_ALIASES` in `fl_ra9_trustmark_projection.py`; hitters: `NAME_ALIASES` in `fl_statscrew_pull.py`).
+- **Regular season only.** The tracking parquet carries `game_type`; park surfaces, the fielding metric and `fl_error_analysis_common.load_tracking` filter to `reg_season`.
+
 ## 4. After the rebuild
 `python run_all.py`, then the pre-registered 2027 checks (`fl_2027_preregistered_checks.py`).

@@ -178,6 +178,7 @@ RA9_SPEC = "target ~ K_pred + BB_pred + ppf + ip_per_g_prior + ppa_resid"
 # are kept ONLY so the many experiment scripts that reproduce earlier results
 # (fl_ra9_*_test.py etc.) keep importing; production uses RA9_SPEC_PROD.
 # See DECISION_LOG.md "ppa_resid routed through K%/BB% and contact quality".
+PITCHER_NAME_ALIASES = {"Gilleran, James": "Gilleran, Jimmy"}
 RA9_SPEC_PROD = "target ~ K_pred + BB_pred + ip_per_g_prior"
 RA9_CONTINUOUS = ["ip_per_g_prior"]
 # PARK-NEUTRAL by construction (2026-10-07): the park term (`ppf`) was dropped from the
@@ -640,7 +641,8 @@ if __name__ == "__main__":
     # carry over year to year far more than they reset) -- the exact same
     # "most recent real year stands in for the projection year" convention
     # workload already used below.
-    w26_real = war[war["year"] == 2026][["player", "bf", "ip", "g"]].rename(
+    # one pitcher_id (Gilleran, 10103730) is recorded under two spellings in war_pitchers; his workload is the sum of both rows (majority spelling kept)
+    w26_real = war[war["year"] == 2026][["player", "bf", "ip", "g"]].assign(player=lambda q: q["player"].replace(PITCHER_NAME_ALIASES)).groupby("player", as_index=False)[["bf", "ip", "g"]].sum().rename(
         columns={"bf": "proj_bf", "ip": "proj_ip"})
     d_ra9 = d_ra9.merge(w26_real, left_on="pitcher", right_on="player", how="left")
     # war_pitchers is keyed by NAME: a name still shared by two genuinely
@@ -656,7 +658,7 @@ if __name__ == "__main__":
     # (GAP_RETURNER_IP); one with no FL innings at all is a debut (DEBUT_MEDIAN_IP).
     # NOT the placeholder 100 below, which is rate-invariant for the park shift but
     # would make a no-data pitcher look like a full-workload one.
-    ip25 = war[war["year"] == 2025].groupby("player")["ip"].sum()
+    ip25 = war[war["year"] == 2025].assign(player=lambda q: q["player"].replace(PITCHER_NAME_ALIASES)).groupby("player")["ip"].sum()
     has26 = d_ra9["proj_ip"].notna() & (d_ra9["proj_ip"] > 0)
     has25 = d_ra9["pitcher"].map(ip25).fillna(0) > 0
     d_ra9["ip_unc"] = np.where(has26, IP_PROJ_A + IP_PROJ_B * d_ra9["proj_ip"].fillna(0),

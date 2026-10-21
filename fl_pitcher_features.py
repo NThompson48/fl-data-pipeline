@@ -73,6 +73,22 @@ RAW_COLS = ["pitcher", "pitcher_id", "pitcher_team", "year", "date", "game_id", 
 
 
 CACHE_PATH = "output/fl_raw_pitches_flagged.parquet"
+# Canonical row order (2026-10-20): the database returns rows in arbitrary order and downstream results (ROS pitchers: mean .013 RA9, max .27) depended on it, so every load is
+# sorted on a near-unique key (verified: 0 duplicates on these columns) and the index reset.
+ORDER_KEY = ["game_id", "pa_id", "pitch_no", "plate_x", "plate_z", "effective_velo", "spin_rate", "ivb", "pitcher_id"]
+
+
+def harmonize_names(df: pd.DataFrame) -> pd.DataFrame:
+    """One spelling per pitcher_id: the most frequent one in the pitch data (ties alphabetical).  Three ids carry more than one name (Gilleran Jimmy / James = the same pitcher;
+    House / McCartney 43 pitches; Parks / Majick 1 pitch) and five downstream places took 'the first name seen', i.e. whichever row the database returned first."""
+    cnt = df.dropna(subset=["pitcher_id", "pitcher"]).groupby(["pitcher_id", "pitcher"]).size().rename("n").reset_index().sort_values(["pitcher_id", "n", "pitcher"], ascending=[True, False, True])
+    best = cnt.drop_duplicates("pitcher_id").set_index("pitcher_id")["pitcher"]
+    out = df.copy(); out["pitcher"] = out["pitcher_id"].map(best).fillna(out["pitcher"]); return out
+
+
+def canonical_order(df: pd.DataFrame) -> pd.DataFrame:
+    df = harmonize_names(df)
+    return df.sort_values([c for c in ORDER_KEY if c in df.columns], kind="mergesort", na_position="last").reset_index(drop=True)
 
 
 def load_fl_pitches_cached(path: str = CACHE_PATH) -> pd.DataFrame:
@@ -82,8 +98,8 @@ def load_fl_pitches_cached(path: str = CACHE_PATH) -> pd.DataFrame:
     itself (which always pulls fresh), only by downstream analysis scripts."""
     import os
     if os.path.exists(path):
-        return pd.read_parquet(path)
-    raw = derive_flags(load_fl_pitches())
+        return canonical_order(pd.read_parquet(path))
+    raw = canonical_order(derive_flags(load_fl_pitches()))
     raw.to_parquet(path, index=False)
     return raw
 
@@ -97,7 +113,7 @@ def load_fl_pitches() -> pd.DataFrame:
     df = read_sql_df(q)
     df["date"] = pd.to_datetime(df["date"])
     print(f"loaded {len(df):,} rows")
-    return df
+    return canonical_order(df)
 
 
 def derive_flags(df: pd.DataFrame) -> pd.DataFrame:

@@ -4,6 +4,7 @@ run_all.py -- rebuild every production output and publish it to the dashboard, i
   python run_all.py                 full rebuild (panel from Supabase, pitchers, park surfaces, bridges, hitters, rest-of-season), publish, then the dashboard tests
   python run_all.py --fast          skip the slow steps that rarely change (park surfaces with bootstrap, rest-of-season snapshots)
   python run_all.py --no-publish    build only (outputs stay in output/)
+  python run_all.py --skip-check    skip the data-freshness pre-flight (fl_data_freshness.py)
   python run_all.py --from STEP     start at step STEP (1-based), e.g. after fixing a failure
 
 Order and why:
@@ -42,6 +43,10 @@ MANIFEST = ["fl_2027_hitter_projections.parquet", "fl_hitter_history.parquet", "
 
 def main(argv):
     fast, publish = "--fast" in argv, "--no-publish" not in argv
+    if "--skip-check" not in argv:                                   # pre-flight: local data files in step with the database (fl_data_freshness.py)
+        r = subprocess.run([sys.executable, "fl_data_freshness.py"], cwd=HERE, env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+        if r.returncode != 0:
+            print("Stopped: stale local data (see above).  Refresh it, or pass --skip-check to run anyway."); return 1
     start = int(argv[argv.index("--from") + 1]) if "--from" in argv else 1
     stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S"); logdir = os.path.join(HERE, "output", "run_logs", stamp); os.makedirs(logdir, exist_ok=True)
     env = dict(os.environ, PYTHONIOENCODING="utf-8")

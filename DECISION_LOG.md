@@ -4680,3 +4680,27 @@ hits with a location only sometimes ("single to center field" vs plain "single")
 LIMITS: plain "single" has no fielder (infield-hit "reach" credit missing in 2025; outs and located hits are fine); mid-game defensive changes need the lineup / substitution lines; the Pointstreak id of each
 game is not in our database -- the site lists ids through an internal endpoint (/api/fl/historical/games_by_date) that robots.txt disallows for crawlers.
 STATUS: no bulk requests made (one static file fetched for the probe).  Waiting on the user's call on how to obtain the 2025 game-id list.
+
+### 2026-10-20 -- Regular-season-only inputs, deterministic row order, one name per pitcher id, freshness guard; full rebuild; fielding re-run
+REGULAR SEASON ONLY (user): the park surfaces were ALREADY regular-season only (all 85,779 balls from reg_season games; the plate-appearance merge dropped other types) -> no change; an explicit game_type filter was
+added so it cannot regress.  An earlier statement that the surfaces included playoff / spring-training games was wrong.  Readers that did include other types and now filter: fl_fielding_part_2026.py (544 playoff balls,
+2.5%) and fl_error_analysis_common.load_tracking.  The tracking parquet now carries game_type (pull_2025_2026.py): 2025 848 reg-season games, 2026 939.
+ROW-ORDER DEPENDENCE (found while explaining a ROS shift): the database returns rows in arbitrary order and results depended on it.  Test: pitcher cache restored to its old row order -> ROS pitchers identical to the
+10-14 outputs (max diff 0); new order -> mean .013 RA9, max .27.  Cause of the order sensitivity in the pitch-level models not isolated (cross-fitted fold assignment is the candidate).  FIX: canonical sort in
+pull_2025_2026.py (game_id, pitch_uid) and fl_pitcher_features.canonical_order (ORDER_KEY, 0 duplicates).  One-time re-draw vs the old order: pitcher K% mean .0014 (max .0096), stuff+ mean 1.3 (max 14), RA9 baseline mean
+.013, hitter wOBA mean 5e-6 (max 9e-5); ROS pitcher RA9 vs what happened: RMSE 2.78972 -> 2.78925 (P better .97, trivial), MAE 1.87926 -> 1.87905; ROS hitter wOBA unchanged -> no accuracy cost; results are now reproducible.
+NAME BUG (exposed by the order change): three pitcher_ids carry two spellings (Gilleran Jimmy 1,272 pitches / James 119 = same pitcher; House / McCartney 43; Parks / Majick 1) and five places took the first name seen
+(fl_production_projection x3, fl_pitcher_ros_stuff.idmap, fl_position_player_flag).  Gilleran's projected innings were 64.9 or 23.5 depending on row order.  FIX: fl_pitcher_features.harmonize_names (majority spelling,
+ties alphabetical) at load; war_pitchers workload summed over his two spellings (PITCHER_NAME_ALIASES).  Result: Gilleran 69.1 IP (72.7 + 6.7 IP of raw workload), WAR .56 -> .51; only 1 of 732 pitchers' innings changed,
+11 have |dWAR| > .02 (largest .05).
+FRESHNESS GUARD: fl_data_freshness.py runs first in run_all.py (--skip-check bypasses): tracking parquet, pitcher cache (+ canonical order, one name per id), hitter BBE and pitch caches vs the database; the stale
+08-16 parquet would have failed (757 of 978 games, no game_type).  ROLL_FORWARD.md section 3b documents the rules.
+REBUILD: full run_all (steps 1-11) and from step 2 after the name fix, all OK; published (23 files), 49 dashboard tests pass.
+FIELDING RE-RUN (regular season only, canonical order; PART spec unchanged): balls in play joined 21,168 (21,712 before).  PART range + throw, all infielders: full-time reliability .410 -> .428 (rule >= .40 met; the
+average-opportunity figure printed with it is .398); by position 1B .31, 2B .29, 3B .51, SS .55.  RANGE ONLY (start-position): .493 -> .395 (r .230, 90% .08-.37; 1B .35, 2B .41, 3B .45, SS .54); throw only ~.05.
+RDA-style grid (ball-only vs start-position, all infielders, full-time reliability alt / chron): REACH start depth 1-4 .38/.08, .46/.00, .49/.00, .45/.00; ball .48/.43, .53/.42, .57/.44, .61/.46.  TOTAL start .27/.27, .30/.16,
+.27/.14, .30/.11; ball .44/.37, .46/.40, .48/.39, .51/.40.  Team clustering test: none (ratio .63-1.02, p .45-.91).  By the pre-stated rule ball-only now beats start-position by > .05 under both splits at every depth
+(REACH +.10 to +.16 alt, +.35 to +.46 chron; TOTAL +.14 to +.21 alt, +.10 to +.29 chron) -- but ball-only also carries team positioning (team credit difference vs start-position correlates .93 with team positioning runs).
+LESSON: the start-position metric's reliability swings by about +/- .1 between equally valid versions of the data and fold assignment (range-only .367 stale data, .493 full data, .395 regular season + sorted; PART .297
+-> .410 -> .428); anything near the .40 rule is within that noise.  Ball-only is stable (reach alt .59 -> .61, chron .48 -> .46).  Fielding stays OUT of WAR.  For 2027 (C9): repeat the cross-fit over several
+fold assignments and average predictions before testing the rule.

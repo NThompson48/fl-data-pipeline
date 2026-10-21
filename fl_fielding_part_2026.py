@@ -37,9 +37,9 @@ def load():
     from fl_supabase import read_sql_df
     import fl_hitter_bridge_test as hb
     cols = ["game_id", "pa_id", "year", "inning", "batter", "batter_side", "batter_team", "home_team", "pitcher_team", "play_result", "exit_speed", "angle", "direction", "distance", "hang_time",
-            "is_terminal_pitch"] + [f"pos_{p}_{a}" for p in ("1b", "2b", "ss", "3b") for a in ("x", "z")] + [f"name_{p}" for p in ("1b", "2b", "ss", "3b")]
+            "is_terminal_pitch", "game_type"] + [f"pos_{p}_{a}" for p in ("1b", "2b", "ss", "3b") for a in ("x", "z")] + [f"name_{p}" for p in ("1b", "2b", "ss", "3b")]
     c = pd.read_parquet("2025_2026_pitches.parquet", columns=cols)
-    c = c[(c["year"] == 2026) & c["is_terminal_pitch"].astype(str).isin(["1", "True", "true"]) & c["play_result"].isin(["out", "single", "double", "triple", "error", "fielders_choice", "sacrifice"])].copy()
+    c = c[(c["year"] == 2026) & (c["game_type"] == "reg_season") & c["is_terminal_pitch"].astype(str).isin(["1", "True", "true"]) & c["play_result"].isin(["out", "single", "double", "triple", "error", "fielders_choice", "sacrifice"])].copy()
     c = c[c["exit_speed"].notna() & c["angle"].notna() & c["direction"].notna()]
     c["half"] = np.where(c["batter_team"] == c["home_team"], "BOTTOM", "TOP")
     c["bn"] = c["batter"].map(lambda s: hb.norm(" ".join(reversed(str(s).split(", "))) if ", " in str(s) else s))

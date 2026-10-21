@@ -15,7 +15,7 @@ from fl_supabase import read_sql_df
 
 COLUMNS = [
     # --- core / context ---
-    "game_id", "pitch_uid", "date", "year", "inning",
+    "game_id", "pitch_uid", "date", "year", "game_type", "inning",
     "home_team", "away_team",
     "batter", "batter_id", "batter_team", "batter_side",
     "pitcher", "pitcher_id", "pitcher_team", "pitcher_throws",
@@ -60,7 +60,8 @@ def pull(years=(2025, 2026)) -> pd.DataFrame:
         FROM pitches
         WHERE year = ANY(:years)
     """)
-    return read_sql_df(q, params={"years": list(years)})
+    df = read_sql_df(q, params={"years": list(years)})
+    return df.sort_values(["game_id", "pitch_uid"], kind="mergesort").reset_index(drop=True)      # canonical order (the database returns rows arbitrarily; fold assignments etc. depend on it)
 
 
 if __name__ == "__main__":

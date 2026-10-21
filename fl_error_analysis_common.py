@@ -28,7 +28,7 @@ import fl_eval_weights as ew
 TRACK = "2025_2026_pitches.parquet"
 COLS = ["game_id", "pa_id", "pa_pitch_count", "year", "date", "inning", "batter", "batter_side", "batter_team", "pitcher", "pitcher_id", "pitcher_team", "pitcher_throws",
         "balls", "strikes", "pitch_call", "play_result", "pitch_type", "effective_velo", "ivb", "horz_break", "spin_rate", "extension", "rel_height", "arm_angle",
-        "vert_appr_angle", "outside_zone", "csoe", "batspeed", "exit_speed", "angle", "direction", "barrel", "xwoba", "oaa", "is_terminal_pitch", "k_or_bb"]
+        "vert_appr_angle", "outside_zone", "csoe", "batspeed", "exit_speed", "angle", "direction", "barrel", "xwoba", "oaa", "is_terminal_pitch", "k_or_bb", "game_type"]
 BALL = {"ball_called", "ball_in_dirt", "ball_intentional", "automatic_ball"}
 SWING = {"strike_swinging", "foul_not_fieldable", "foul_fieldable", "foul_ball", "in_play"}
 FOUL = {"foul_not_fieldable", "foul_fieldable", "foul_ball"}
@@ -43,7 +43,7 @@ def _clean(s):
 
 
 def load_tracking():
-    t = pd.read_parquet(TRACK, columns=COLS)
+    t = pd.read_parquet(TRACK, columns=COLS); t = t[t["game_type"] == "reg_season"].reset_index(drop=True)          # regular season only (user 2026-10-20)
     t["date"] = pd.to_datetime(t["date"]); t["bat"] = _clean(t["batter"]); t["pit"] = _clean(t["pitcher"]); t["pitcher_id"] = t["pitcher_id"].astype(str)
     pc = t["pitch_call"].astype(str)
     t["swing"] = pc.isin(SWING).astype(float); t["whiff"] = (pc == "strike_swinging").astype(float); t["foul"] = pc.isin(FOUL).astype(float)

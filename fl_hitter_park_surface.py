@@ -19,8 +19,8 @@ FEATS = {"evla": ["ev", "la"], "evla_side": ["ev", "la", "left"], "evla_side_dir
 
 
 def load_balls():
-    d = pd.read_parquet("2025_2026_pitches.parquet", columns=["game_id", "pa_id", "year", "stadium", "home_team", "batter_team", "is_terminal_pitch", "exit_speed", "angle", "direction", "xwoba", "woba", "play_result", "batter_side"])
-    b = d[d["is_terminal_pitch"].astype(str).isin(["1", "True", "true"]) & d["exit_speed"].notna() & d["angle"].notna() & d["woba"].notna() & d["xwoba"].notna() & d["play_result"].isin(["out", "single", "double", "triple", "error", "fielders_choice", "sacrifice", "home_run"]) & d["batter_side"].isin(["left", "right"])].copy()
+    d = pd.read_parquet("2025_2026_pitches.parquet", columns=["game_id", "pa_id", "year", "game_type", "stadium", "home_team", "batter_team", "is_terminal_pitch", "exit_speed", "angle", "direction", "xwoba", "woba", "play_result", "batter_side"])
+    b = d[(d["game_type"] == "reg_season") & d["is_terminal_pitch"].astype(str).isin(["1", "True", "true"]) & d["exit_speed"].notna() & d["angle"].notna() & d["woba"].notna() & d["xwoba"].notna() & d["play_result"].isin(["out", "single", "double", "triple", "error", "fielders_choice", "sacrifice", "home_run"]) & d["batter_side"].isin(["left", "right"])].copy()
     pa = hr.Tables().pa[["game_id", "pa_id", "name_clean"]].drop_duplicates(["game_id", "pa_id"]); b = b.merge(pa, on=["game_id", "pa_id"], how="left").dropna(subset=["name_clean"]).reset_index(drop=True)
     b["tm"] = (b["stadium"] == TM).astype(int); b["vis"] = (b["batter_team"] != b["home_team"]).astype(int); b["left"] = (b["batter_side"] == "left").astype(int); b["ev"] = b["exit_speed"]; b["la"] = b["angle"]; b["dir"] = b["direction"].fillna(0.0)
     b["res"] = b["woba"] - b["xwoba"]; return b
