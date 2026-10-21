@@ -8,6 +8,7 @@ Everything is seeded; training uses CPU threads set by the caller (torch.set_num
   hidden  tuple of widths, default (128, 64, 32)        act     'relu' | 'silu' | 'gelu'           dropout  p after each hidden layer
   res     residual blocks (width = hidden[0], depth = len(hidden)) with LayerNorm instead of a plain stack
   lr, wd  AdamW learning rate / weight decay             batch   default 1024                       patience / max_epochs  default 8 / 100
+  noise   SD of Gaussian noise added to the standardised inputs in training only (default 0)
   clip    inputs standardised on the training fold and clipped to +/- clip SD (default 6; only .14% of swings have an input beyond 5 SD)
   n_cat   if > 0, the last column of X is an integer category (e.g. pitch type) fed through an embedding of size emb
 """
@@ -15,7 +16,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-DEFAULT = dict(hidden=(128, 64, 32), act="relu", dropout=0.0, res=False, lr=1e-3, wd=1e-4, batch=1024, patience=8, max_epochs=100, clip=6.0, n_cat=0, emb=4)
+DEFAULT = dict(hidden=(128, 64, 32), act="relu", dropout=0.0, res=False, lr=1e-3, wd=1e-4, batch=1024, patience=8, max_epochs=100, clip=6.0, noise=0.0, n_cat=0, emb=4)
 ACTS = {"relu": nn.ReLU, "silu": nn.SiLU, "gelu": nn.GELU}
 
 
@@ -73,7 +74,10 @@ def fit_predict(Xtr, ytr, Xte, groups_tr, seed, cfg=None, cat_tr=None, cat_te=No
     for ep in range(1, cfg["max_epochs"] + 1):
         net.train(); perm = torch.randperm(len(yt), generator=gen)
         for i in range(0, len(perm), cfg["batch"]):
-            b = perm[i:i + cfg["batch"]]; opt.zero_grad(); lossf(net(Xt[b], ct[b] if ct is not None else None), yt[b]).backward(); opt.step()
+            b = perm[i:i + cfg["batch"]]; xb = Xt[b]
+            if cfg["noise"]:
+                xb = xb + cfg["noise"] * torch.randn(xb.shape, generator=gen)          # Gaussian noise on the standardised inputs while training (a data-augmentation regulariser)
+            opt.zero_grad(); lossf(net(xb, ct[b] if ct is not None else None), yt[b]).backward(); opt.step()
         net.eval()
         with torch.no_grad():
             vl = float(lossf(net(Xv, cv), yv))

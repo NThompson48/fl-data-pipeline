@@ -4733,3 +4733,21 @@ embedding.  fl_wh_sva_curves.py draws the per-epoch curves.  One fold (180,662 t
   B (validate on random rows, scikit-learn's design with log-loss): best validation epoch 22, stops at 30, held-out minimum at epoch 12; held-out loss at the kept epoch .4696 vs .4693 best (+.0003): same-pitcher validation keeps
   improving about 10 epochs longer than new-pitcher loss does, but the damage to held-out loss at the kept epoch is small in this fold.  The held-out curve is flat (about .470-.471) from epoch 8 to 30 and noisy (+/- .002 per epoch);
   the validation set holds only about 61 pitchers, so its minimum epoch is itself noisy.
+
+### 2026-10-21 -- Regularisation and learning-rate sweep for the wh_sva network (user: "add more regularization ... try different learning rates")
+DESIGN (fixed before running; fl_wh_sva_reg_lr_sweep.py, fl_wh_sva_reg_lr_confirm.py): STAGE 1 on 2025 swings only (107,330 swings, 435 pitchers; 5-fold GroupKFold by pitcher; 2 seeds per configuration; score = out-of-fold
+per-pitch log-loss of the full model); 28 configurations (280 fits, 11 min): Part A learning rate {3e-4, 1e-3, 3e-3, 1e-2} x regularisation {none; light dropout .1 / wd 1e-2; medium .2 / .1; heavy .3 / .3}, Part B one
+regulariser at lr 1e-3 (dropout, weight decay, input noise, smaller nets).  Noise unit = SE of a 2-seed mean = .00023 log-loss.  Rule: winner = lowest 2-seed mean; ties within one noise unit -> fewer parameters, then
+stronger regularisation; counts as an improvement only if > 2 noise units.  STAGE 2 on 2026 swings (never used for the choice): selected vs baseline vs production XGBoost, 3-seed ensembles; go on to the K% harness only if the
+2026 ensemble log-loss improves by >= 1 noise unit and reliability does not fall by > .01.
+STAGE 1 RESULTS (2025; baseline network .46872, production XGBoost .47007, base rate .54032): best 'lr 1e-3 | heavy (dropout .3, wd .3)' .46795 (-.00078 = 3.4 noise units); ties 'lr 3e-4 | light' .46795 and 'lr 3e-4 | medium'
+.46802; selected by the tie-break: lr 1e-3, dropout .3, weight decay .3.  Learning rate: 3e-4 and 1e-3 equivalent (3e-4 needs about 50 epochs vs 22-41); 3e-3 slightly worse without dropout (+.0003); 1e-2 clearly worse
+(+.0011 none, +.0032 heavy).  Regularisers one at a time (lr 1e-3): dropout .2 -.00047, dropout .3 -.00044, dropout .1 -.00017; weight decay alone does nothing (1e-2 -.00006, .1 +.00022, .3 -.00008, 1.0 -.00007: AdamW
+decay is proportional to the learning rate, so it needs very large values to bite); input noise .2 -.00019, .1 -.00006, .05 +.00012; smaller network (64, 32), 2,753 parameters, -.00013 (as good as the 11,649-parameter net) and
+(32, 16), 865 parameters, +.00041.  Dropout does the work; capacity is not the limit.  Seed-averaged (2 seeds) log-loss differences between configurations are smaller (baseline .46766, best ensembles .46738-.46750).
+STAGE 2 RESULTS (2026; 118,498 swings, 471 pitchers): production XGBoost .47553 (2026-only cross-fit) | baseline network 3-seed ensemble .47195 (single-seed mean .47345) | selected (heavy) ensemble .47238 (single-seed mean .47291).
+Regularisation helps a SINGLE network in both seasons (2025 -.00078, 2026 -.00054) but the seed-averaged baseline is as good or better (selected is worse by .00043 = 1.9 noise units): averaging seeds already supplies the
+variance reduction (worth about .0015, about 3x the regularisation gain).  AUC .7359 vs .7361; reliability baseline .971 (n0 26 pitches), selected .963 (n0 34), production .963 (n0 34); corr with K% (2026): baseline .580,
+selected .530, production .493.  RULE: no confirmed gain (ensemble -1.9 noise units, reliability -.008) -> STOP; no K% harness run for the selected configuration.
+CONCLUSIONS: (1) the unregularised 3-seed network stays the best neural estimator; (2) lr between 3e-4 and 1e-3 is fine, 1e-2 is not; (3) if a single network is ever used, dropout .2-.3 is worth about .0005; (4) the per-pitch edge over
+XGBoost (about .0014 on 2025, .0036 on 2026) is the robust part, and it did not carry to held-out K% (see the earlier entry).  NEXT (not run): score the stuff level against a more direct target, the second-half whiff rate per swing.
