@@ -4719,3 +4719,17 @@ PILOT (fl_wh_sva_nn_pilot.py; 225,828 swings, 766 pitchers after excluding posit
 FRESHNESS GUARD: the database was revised slightly overnight (2026 regular season 285,946 -> 285,943 pitches; 85 more pitch rows with a pitcher id; 2 more balls in play: at most .03%), which tripped the exact-match check.  Policy
 changed to a 0.1% tolerance (warn below, stop above; the stale 08-16 file was 22.8% off) so routine edits do not push people to --skip-check.  The caches / experiments in progress were not refreshed (it would change baselines mid-test);
 refresh before the next production rebuild.
+DOWNSTREAM K% TEST (fl_wh_sva_nn_test.py; fl_wh_sva_variants_test.py protocol unchanged; fold 2 = 2H2026 targets, n = 256 pitchers, level-free, frozen standard weights, weighted RMSE AND MAE, pitcher bootstrap):
+  production (whiff, XGBoost) RMSE .05501 / MAE .04406 | nn (1 seed) .05497 (d -.00004, 90% [-.00110, +.00103], P(better) .52) / .04365 (d -.00041, P .77) | nn3 .05564 (d +.00063, [-.00028, +.00153], P .13) / .04425 (d +.00019, P .39)
+  | blend .05531 (d +.00030, P .18) / .04421 (d +.00015, P .35).  Coefficient of the level in the K% model (t): prod .54 (2.4), nn .32 (2.0), nn3 .60 (3.2), blend .63 (3.0).
+  BB% + each level: no change (dRMSE within +/- .00002; P better .37-.63).  NOT ADOPTED: no variant has both RMSE and MAE better with P >= .90; nn3 (best per-pitch log-loss, best t-statistic) is worse out of sample on RMSE.
+  READING: a better per-pitch stuff model and a 40% less noisy pitcher-level number did not improve held-out K%.  The K% model already leans on own K% (about half), the bridge, spin and extension; and 256 pitchers cannot
+  resolve a difference below about .0006 in RMSE (the bootstrap intervals are +/- .001).  The in-sample t-statistic (nn3 3.2) is stronger than production's (2.4) and the held-out gain is nil: the usual gap between fitting
+  the transition and predicting the next half.  Per-pitch quality is the right yardstick for the STUFF model; K% is a weak, noisy test of it.
+TRAINER (fl_wh_sva_torch.py): PyTorch MLP / residual MLP, AdamW, early stopping on validation LOG-LOSS with a PITCHER-grouped validation split (scikit-learn: accuracy, random rows), seeded and repeatable; optional pitch-type
+embedding.  fl_wh_sva_curves.py draws the per-epoch curves.  One fold (180,662 training swings, 45,166 swings from 153 unseen pitchers; base-rate log-loss .5450), 128-64-32 ReLU, 60 epochs, no early stopping:
+  A (validate on new pitchers): best validation epoch 13, would stop at 21, held-out loss .4697 at the kept epoch = the held-out minimum (epoch 13); training loss keeps falling (.4651 at 13 -> about .457 at 60) while held-out
+  loss drifts up to about .473 by epoch 60: overfitting from about epoch 13.
+  B (validate on random rows, scikit-learn's design with log-loss): best validation epoch 22, stops at 30, held-out minimum at epoch 12; held-out loss at the kept epoch .4696 vs .4693 best (+.0003): same-pitcher validation keeps
+  improving about 10 epochs longer than new-pitcher loss does, but the damage to held-out loss at the kept epoch is small in this fold.  The held-out curve is flat (about .470-.471) from epoch 8 to 30 and noisy (+/- .002 per epoch);
+  the validation set holds only about 61 pitchers, so its minimum epoch is itself noisy.
