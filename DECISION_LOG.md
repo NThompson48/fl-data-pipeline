@@ -4767,3 +4767,7 @@ production stuff term was validated as a small held-out win in some folds / dire
 the stuff term adds little -- consistent with a small effect these samples cannot resolve, not with 'stuff is useless'.  (4) For pitchers with an established record the own whiff rate (about 500+ swings, n0 200) leaves little for
 stuff to add; stuff should matter for THIN histories (rookies, returners), which the additive form (constant weight) does not exploit.
 NOT RUN, candidate: stuff as an INFORMATIVE PRIOR with sample-size-dependent weight (pred = prior(stuff) + (own - prior) * n / (n + n0)) and a thin-vs-thick split of the T2 pitchers; also applies to the K% model's additive wh_sva term.
+USER FRAMING (2026-10-21): "Stuff is most useful as an earlier signal than Whiff%, not necessarily a better one over a longer period of time."  Supporting numbers (alternating games, pitchers >= 150 pitches per half): own whiff rate per swing
+split-half r .569 (S-B .725; 235 swings = 527 pitches per half; 447 pitchers), implied n0 178 swings = 400 pitches; stuff-level n0 31 (sk nn) / 37 (sk nn3) / 56 (production) pitches -> stuff reaches half signal 7-13x sooner.
+Reliability after 50 / 100 / 200 pitches: whiff rate .11 / .20 / .33; stuff (production n0 56) .47 / .64 / .78.  Reliability is not validity: the predictive claim at SMALL n (stuff vs own whiff rate after the first N pitches)
+is still to be tested; at established samples stuff adds nothing beyond the record (entries above).  Saved to memory (stuff-is-an-early-signal).
