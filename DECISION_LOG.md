@@ -4771,3 +4771,22 @@ USER FRAMING (2026-10-21): "Stuff is most useful as an earlier signal than Whiff
 split-half r .569 (S-B .725; 235 swings = 527 pitches per half; 447 pitchers), implied n0 178 swings = 400 pitches; stuff-level n0 31 (sk nn) / 37 (sk nn3) / 56 (production) pitches -> stuff reaches half signal 7-13x sooner.
 Reliability after 50 / 100 / 200 pitches: whiff rate .11 / .20 / .33; stuff (production n0 56) .47 / .64 / .78.  Reliability is not validity: the predictive claim at SMALL n (stuff vs own whiff rate after the first N pitches)
 is still to be tested; at established samples stuff adds nothing beyond the record (entries above).  Saved to memory (stuff-is-an-early-signal).
+
+### 2026-10-21 -- Is stuff an EARLIER signal than Whiff%?  First-N-swings test (user: "Sure"; fl_wh_sva_firstN_test.py)
+DESIGN (fixed before running): per pitcher-season, first N swings = what is known early, target = whiff rate on his remaining swings that season (>= 100 remaining); N = 20 / 40 / 80 / 150 / 250 / 400 swings (about 45 / 90 / 180 /
+340 / 560 / 900 pitches); stuff cross-fitted by pitcher over the pooled 2025-26 swings; estimators production XGBoost, sk_nn3, torch3 (3 seeds each); models fit on one season and scored on the other (2025->2026, 2026->2025):
+Whiff% only (shrunk, n0 by grid), stuff only, constant-weight add-on, informative prior (prior = a + c * stuff, prediction = prior + (own - prior) * N / (N + n0')); inverse-variance weights frozen; level-free; weighted RMSE and
+MAE; pitcher bootstrap vs Whiff%-only.  Test pitchers 294 / 272 at N = 20 down to 67 / 67 at N = 400.  (First attempt crashed on import order: torch must be imported before xgboost / scikit-learn on this machine; fixed.)
+RESULTS (means of the two directions):  swing-weighted correlation with the rest-of-season whiff rate, own Whiff% vs stuff (production / sk_nn3 / torch3): N 20 .200 vs .263 / .286 / .290; 40 .270 vs .294 / .341 / .341;
+80 .377 vs .321 / .370 / .367; 150 .479 vs .344 / .393 / .382; 250 .502 vs .309 / .393 / .370; 400 .573 vs .295 / .368 / .348.  Stuff leads for the first 40 swings, the two are level at about 80 (about 180 pitches), Whiff% leads
+from 150; the stuff correlation plateaus at about .35-.39 (networks) / .30-.34 (production) while Whiff% keeps climbing.  Stuff-only dRMSE vs Whiff%-only: N 20 -.0004 / -.0009 / -.0009, N 40 -.0004 / -.0010 / -.0010, N 80 +.0018 /
++.0009 / +.0010, then +.0025 to +.0055 (worse).  Strict rule (both metrics beat Whiff%-only with P >= .90) is not met by stuff-only anywhere; closest N = 20, torch3, 2026->2025 (RMSE P .95, MAE P .89).
+INFORMATIVE PRIOR dRMSE vs Whiff%-only (production / sk_nn3 / torch3): N 20 -.0010 / -.0014 / -.0014; 40 -.0016 / -.0021 / -.0021; 80 -.0008 / -.0012 / -.0014; 150 -.0005 / -.0006 / -.0006; 250 +.0004 / +.0001 / -.0000; 400 -.0001 /
++.0003 / -.0002.  Meets the strict rule (both metrics, P >= .90): 2026->2025 at N 20, 40, 80 for all three estimators, at 150 for production and sk_nn3, at 250 for sk_nn3; 2025->2026 only at N 20 (sk_nn3), N 40 (sk_nn3, torch3) and N 400
+(torch3).  Fitted prior n0' = 200-300 swings at every N (stuff carries about 83% of the weight at N = 40, about 45% at N = 250).  The constant-weight add-on is nearly identical per N (its coefficients are fitted per N here).
+NETWORKS vs PRODUCTION: higher correlation at every N (about +.03 to +.08); prior gains about 30% larger at N 20-40 (-.0014 / -.0021 vs -.0010 / -.0016); in the 2026->2025 direction the three estimators are level.  A paired
+estimator-vs-estimator bootstrap was NOT run.
+READING: the user's framing holds: stuff is the better signal for roughly the first 40-80 swings, Whiff% overtakes by about 80-150, and stuff's value comes as a PRIOR that fades, not as a stand-alone predictor.  Gains of
+.0010-.0021 RMSE (about 2-4% of the .049 level) for pitchers with under about 150 swings; none beyond about 250.  The network's advantage over production is real in direction and size but not tested formally.
+NEXT (not run): (1) paired network-vs-production test inside the prior model; (2) fit the prior on POOLED N (one a, c, n0' for all N) and compare it with a constant-weight add-on on mixed-N pitchers (the K% model's situation);
+(3) the same structure for K% with thin-history pitchers (rookies included).

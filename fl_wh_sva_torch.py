@@ -8,6 +8,7 @@ Everything is seeded; training uses CPU threads set by the caller (torch.set_num
   hidden  tuple of widths, default (128, 64, 32)        act     'relu' | 'silu' | 'gelu'           dropout  p after each hidden layer
   res     residual blocks (width = hidden[0], depth = len(hidden)) with LayerNorm instead of a plain stack
   lr, wd  AdamW learning rate / weight decay             batch   default 1024                       patience / max_epochs  default 8 / 100
+  sched   'plateau' = ReduceLROnPlateau on the validation log-loss (sched_patience epochs, sched_factor), so a long run keeps refining at smaller steps; default None
   noise   SD of Gaussian noise added to the standardised inputs in training only (default 0)
   clip    inputs standardised on the training fold and clipped to +/- clip SD (default 6; only .14% of swings have an input beyond 5 SD)
   n_cat   if > 0, the last column of X is an integer category (e.g. pitch type) fed through an embedding of size emb
@@ -16,7 +17,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-DEFAULT = dict(hidden=(128, 64, 32), act="relu", dropout=0.0, res=False, lr=1e-3, wd=1e-4, batch=1024, patience=8, max_epochs=100, clip=6.0, noise=0.0, n_cat=0, emb=4)
+DEFAULT = dict(hidden=(128, 64, 32), act="relu", dropout=0.0, res=False, lr=1e-3, wd=1e-4, batch=1024, patience=8, max_epochs=100, clip=6.0, noise=0.0, sched=None, sched_patience=4, sched_factor=0.5, n_cat=0, emb=4)
 ACTS = {"relu": nn.ReLU, "silu": nn.SiLU, "gelu": nn.GELU}
 
 
@@ -68,6 +69,7 @@ def fit_predict(Xtr, ytr, Xte, groups_tr, seed, cfg=None, cat_tr=None, cat_te=No
         ct, cv, ce = (torch.tensor(c, dtype=torch.long) for c in (cat_tr[~is_val], cat_tr[is_val], cat_te))
     net = Net(Xt.shape[1], cfg); opt = torch.optim.AdamW(net.parameters(), lr=cfg["lr"], weight_decay=cfg["wd"]); lossf = nn.BCEWithLogitsLoss()
     best, best_state, bad, ep = np.inf, None, 0, 0
+    sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, factor=cfg["sched_factor"], patience=cfg["sched_patience"], min_lr=1e-6) if cfg["sched"] == "plateau" else None
     extra = {k: (prep(X), torch.tensor(yy, dtype=torch.float32)) for k, (X, yy) in (track or {}).items()}
     if history is not None:
         history.update({"train": [], "val": [], **{k: [] for k in extra}})
@@ -86,6 +88,8 @@ def fit_predict(Xtr, ytr, Xte, groups_tr, seed, cfg=None, cat_tr=None, cat_te=No
                 history["val"].append(vl)
                 for k, (Xk, yk) in extra.items():
                     history[k].append(float(lossf(net(Xk), yk)))
+        if sched is not None:
+            sched.step(vl)                                                      # halve the learning rate when validation loss has not improved for sched_patience epochs
         if vl < best - 1e-5:
             best, bad, best_state = vl, 0, {k: v.clone() for k, v in net.state_dict().items()}
         else:

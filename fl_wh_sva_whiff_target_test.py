@@ -16,6 +16,7 @@ Scored on T2: weighted RMSE AND MAE (weights frozen from the own-rate-only model
 READING RULE (pre-stated): a network 'measures whiff talent better' if it beats production stuff on BOTH RMSE and MAE in (b) with P(better) >= .90; a network 'adds to own-rate' if it beats own-rate-only in (a) on both with P >= .90.
 Output: output/wh_sva_whiff_target_test.json
 """
+import torch  # MUST come first: on this Windows machine importing xgboost / scikit-learn before torch breaks torch's DLL load (WinError 1114)
 import json
 import time
 import warnings

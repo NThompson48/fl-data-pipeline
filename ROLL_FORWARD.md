@@ -33,5 +33,8 @@ Supabase tables (lineup_stats, pitches, war_players, advanced_splits, war_pitche
   (`PITCHER_NAME_ALIASES` in `fl_ra9_trustmark_projection.py`; hitters: `NAME_ALIASES` in `fl_statscrew_pull.py`).
 - **Regular season only.** The tracking parquet carries `game_type`; park surfaces, the fielding metric and `fl_error_analysis_common.load_tracking` filter to `reg_season`.
 
+- **PyTorch import order (Windows).** `import torch` must be the first heavy import in any script that also uses xgboost or scikit-learn (the reverse order fails with WinError 1114 on c10.dll).  Scripts that touch both
+  start with `import torch`; the pipeline itself (run_all.py steps) does not use torch.
+
 ## 4. After the rebuild
 `python run_all.py`, then the pre-registered 2027 checks (`fl_2027_preregistered_checks.py`).
