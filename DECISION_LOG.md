@@ -4751,3 +4751,19 @@ variance reduction (worth about .0015, about 3x the regularisation gain).  AUC .
 selected .530, production .493.  RULE: no confirmed gain (ensemble -1.9 noise units, reliability -.008) -> STOP; no K% harness run for the selected configuration.
 CONCLUSIONS: (1) the unregularised 3-seed network stays the best neural estimator; (2) lr between 3e-4 and 1e-3 is fine, 1e-2 is not; (3) if a single network is ever used, dropout .2-.3 is worth about .0005; (4) the per-pitch edge over
 XGBoost (about .0014 on 2025, .0036 on 2026) is the robust part, and it did not carry to held-out K% (see the earlier entry).  NEXT (not run): score the stuff level against a more direct target, the second-half whiff rate per swing.
+
+### 2026-10-21 -- Do the stuff estimators predict FUTURE whiff rate per swing? (user: "Let's test it"; fl_wh_sva_whiff_target_test.py)
+DESIGN (fixed before running): K% harness windows -- T1 fit: 2025 features -> 1H2026 target; T2 test: 2025 + 1H2026 features -> 2H2026 target; stuff cross-fitted inside the feature window only; estimators production XGBoost,
+sk_nn3 (scikit-learn MLP, 3 seeds), torch3 (PyTorch MLP, unregularised baseline, 3 seeds, pitcher-grouped early stopping); model whiff ~ b0 + b1 * own_shrunk [+ b2 * stuff], frozen on T1 (own-rate shrinkage n0 = 200
+swings chosen on T1), scored on T2 level-free with frozen inverse-variance weights, weighted RMSE AND MAE, pitcher bootstrap.  Pitchers >= 100 feature swings and >= 60 target swings: T1 n = 102, T2 n = 184 (mean target swings
+260 / 237).  Rule: a network 'measures whiff talent better' if it beats production stuff on both metrics with P >= .90; stuff 'adds' if it beats own-rate-only on both with P >= .90.
+RESULTS T2: own whiff rate only RMSE .04501 / MAE .03584 | + production stuff .04539 (+.00039, [-.00083, +.00158], P better .30) / .03636 (P .25) | + sk_nn3 .04583 (+.00083, P .20) / .03724 (P .08) | + torch3 .04523
+(+.00023, P .39) / .03621 (P .33).  Networks vs production stuff: torch3 -.00016 RMSE (P .62), -.00015 MAE (P .64): no difference; sk_nn3 +.00044 RMSE (P .32), +.00088 MAE (P .09, i.e. 91% likely worse).  T1 in-sample stuff
+coefficients t = 2.9 (production), 3.7 (sk_nn3), 3.4 (torch3) with b_own .73-.77 (own-only b_own .997).  Swing-weighted correlation of the stuff level with 2H whiff/swing: production .329, sk_nn3 .326, torch3 .366; partial
+correlation with the pitcher's own shrunk rate removed: .070 / .081 / .085; correlation of the stuff level with his own rate .49 / .47 / .54.  Pitcher-level stuff levels agree .81-.91 across estimators.
+READING: (1) no estimator adds held-out accuracy beyond a pitcher's own whiff record (all slightly worse, all within noise; bootstrap intervals +/- .001); (2) torch3 is nominally best on every secondary measure (corr, partial
+corr, RMSE vs production) but nothing reaches the .90 rule; the scikit-learn network is the weakest here; (3) same pattern as the K% test: strong in-sample t (3 to 4), no held-out gain.  Context from earlier entries: the
+production stuff term was validated as a small held-out win in some folds / directions (e.g. ROS reverse check dRMSE -.0009, P .90; level prior entry 2026-10-xx) and the 2026-10-13 variants entry already noted that on this fold
+the stuff term adds little -- consistent with a small effect these samples cannot resolve, not with 'stuff is useless'.  (4) For pitchers with an established record the own whiff rate (about 500+ swings, n0 200) leaves little for
+stuff to add; stuff should matter for THIN histories (rookies, returners), which the additive form (constant weight) does not exploit.
+NOT RUN, candidate: stuff as an INFORMATIVE PRIOR with sample-size-dependent weight (pred = prior(stuff) + (own - prior) * n / (n + n0)) and a thin-vs-thick split of the T2 pitchers; also applies to the K% model's additive wh_sva term.
