@@ -43,15 +43,15 @@ class PriorKModel:
         return {"c": float(self.c), "n0_s": float(self.n0_s), "stuff_mean": float(self.stuff_mean), "n0_k": float(self.n0_k), "lg": float(self.lg), "c_ols_slope": float(self.c0)}
 
 
-def fit(d, n0_k, lg, w, target="K_rate_actual"):
+def fit(d, n0_k, lg, w, target="K_rate_actual", extra=()):
     """d: training frame with naive_K_rate, PA, wh_sva_level, fl_k_rate_bridge, spin_z_norm, extension, target.  Returns a PriorKModel."""
-    stuff_mean = float(d["wh_sva_level"].mean()); ds = (d["wh_sva_level"] - stuff_mean).to_numpy(); y = d[target].to_numpy()
+    spec = PRIOR_SPEC + list(extra); stuff_mean = float(d["wh_sva_level"].mean()); ds = (d["wh_sva_level"] - stuff_mean).to_numpy(); y = d[target].to_numpy()
     c0 = float(np.sum(w * ds * (y - np.average(y, weights=w))) / np.sum(w * ds ** 2))
 
     def sse(theta):
-        c, n0_s = c0 * np.exp(theta[0]), np.exp(theta[1]); m = bt.fit_weighted(add_blend(d, c, n0_s, stuff_mean, n0_k, lg), target, PRIOR_SPEC, w)
+        c, n0_s = c0 * np.exp(theta[0]), np.exp(theta[1]); m = bt.fit_weighted(add_blend(d, c, n0_s, stuff_mean, n0_k, lg), target, spec, w)
         return float(np.sum(w * (y - m.predict(add_blend(d, c, n0_s, stuff_mean, n0_k, lg)).to_numpy()) ** 2))
 
     best = min((minimize(sse, x0, method="Nelder-Mead", options={"xatol": 1e-3, "fatol": 1e-10, "maxiter": 200}) for x0 in ([0.0, np.log(30.0)], [0.4, np.log(60.0)])), key=lambda r: r.fun)
-    c, n0_s = c0 * np.exp(best.x[0]), float(np.exp(best.x[1])); ols = bt.fit_weighted(add_blend(d, c, n0_s, stuff_mean, n0_k, lg), target, PRIOR_SPEC, w)
+    c, n0_s = c0 * np.exp(best.x[0]), float(np.exp(best.x[1])); ols = bt.fit_weighted(add_blend(d, c, n0_s, stuff_mean, n0_k, lg), target, spec, w)
     return PriorKModel(ols, c, n0_s, stuff_mean, n0_k, lg, c0)
