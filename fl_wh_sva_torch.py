@@ -97,6 +97,6 @@ def fit_predict(Xtr, ytr, Xte, groups_tr, seed, cfg=None, cat_tr=None, cat_te=No
             if bad >= cfg["patience"]:
                 break
     net.load_state_dict(best_state); net.eval()
-    with torch.no_grad():
-        p = torch.sigmoid(net(Xe, ce)).numpy().astype(float)
+    with torch.no_grad():                                                           # scored in chunks so millions of rows (partial-dependence grids) fit in memory
+        p = np.concatenate([torch.sigmoid(net(Xe[i:i + 200000], ce[i:i + 200000] if ce is not None else None)).numpy() for i in range(0, len(Xe), 200000)]).astype(float)
     return p, ep, best
