@@ -30,6 +30,7 @@ import fl_milb_bridge as mbridge
 import fl_unified_bridge as ub
 import fl_bridge_matching as bm
 import mlb_marcel as mm
+import fl_k_prior as kp
 
 SPEC = bt.MODEL_SPECS["naive+other_league+surprise_prior"]
 
@@ -210,15 +211,16 @@ def fit_frozen_model(raw):
     the regression as its own free OLS term -- see BB_SPEC_BLENDED above."""
     df_tr, n0_k, n0_bb = bt.assemble(raw, [(bt.START_2025, bt.END_2025)],
                                       [(bt.START_2026, bt.CUTOFF_2026)], with_changepoints=False)
-    d_tr_k = df_tr.dropna(subset=["K_rate_actual"] + SPEC["K"])
+    d_tr_k = df_tr.dropna(subset=["K_rate_actual"] + SPEC["K"])     # SPEC["K"] only fixes the population (rows with every input); the model itself is the stuff-prior form (fl_k_prior)
     d_tr_bb = df_tr.dropna(subset=["BB_rate_actual", "naive_BB_rate", "fl_bb_rate_bridge", "PA",
                                     "command_score"]).copy()
     w_k = mm.reliability_weight(d_tr_k["PA_test"], n0_k).values
     w_bb = mm.reliability_weight(d_tr_bb["PA_test"], n0_bb).values
-    m_k = bt.fit_weighted(d_tr_k, "K_rate_actual", SPEC["K"], w_k)
-
     term_tr = fp.filter_period(raw, bt.START_2025, bt.END_2025)
     term_tr = term_tr[term_tr["is_terminal"]]
+    lg_k_rate_tr = (term_tr["k_or_bb"] == "strikeout").mean()
+    m_k = kp.fit(d_tr_k, n0_k, lg_k_rate_tr, w_k)
+    print(f"  K% stuff prior: c={m_k.c:.4f} (OLS slope {m_k.c0:.4f}), n0_s={m_k.n0_s:.1f} pseudo-PA, n={len(d_tr_k)}")
     lg_bb_rate_tr = (term_tr["k_or_bb"] == "walk").mean()
     d_tr_bb["BB_raw"] = d_tr_bb["naive_BB_rate"] * (d_tr_bb["PA"] + n0_bb) - n0_bb * lg_bb_rate_tr
     n0_bridge_bb = mm.fit_n0_bridge(d_tr_bb["BB_raw"], d_tr_bb["PA"], n0_bb, lg_bb_rate_tr,
@@ -317,7 +319,7 @@ def build_2027_projections(raw, m_k, m_bb, n0_bridge_bb: float, rho_kbb: float, 
     lg_bb_rate_2026 = (term_2026["k_or_bb"] == "walk").mean()
 
     # Gap prior for pitchers with a 2025 line but no 2026 PA (see GAP_N0_*)
-    feat["PA_model"] = feat["PA"]
+    feat["PA_model"] = feat["PA"]; feat["PA_model_k"] = feat["PA"]
     gap = feat["naive_K_rate"].isna()
     feat["is_gap"] = gap
     if gap.any():
@@ -328,6 +330,7 @@ def build_2027_projections(raw, m_k, m_bb, n0_bridge_bb: float, rho_kbb: float, 
         feat.loc[gap, "naive_K_rate"] = (dk * k25 + n0_k * lg_k_rate_2026) / (dk * pa25 + n0_k)
         feat.loc[gap, "naive_BB_rate"] = (dbb * bb25 + n0_bb * lg_bb_rate_2026) / (dbb * pa25 + n0_bb)
         feat.loc[gap, "PA_model"] = dbb * pa25
+        feat.loc[gap, "PA_model_k"] = dk * pa25      # K%'s effective PA for the stuff-prior blend (the gap K rate was built with dk, BB's with dbb)
         print(f"  gap prior (2025 record, no 2026 PA): {int(gap.sum())} pitchers, "
               f"{int(feat.loc[gap, 'naive_K_rate'].notna().sum())} with a usable 2025 line")
 
@@ -394,9 +397,10 @@ def build_2027_projections(raw, m_k, m_bb, n0_bridge_bb: float, rho_kbb: float, 
             mu = feat.loc[~g, c].mean()
             feat.loc[g, c] = mu + keep * (feat.loc[g, c] - mu)
 
-    d_k = feat.dropna(subset=SPEC["K"]).copy()
+    feat["lg_k_frame"] = lg_k_rate_2026; feat["n0_k_frame"] = n0_k       # the stuff prior is evaluated against THIS window's league rate / n0
+    d_k = feat.dropna(subset=SPEC["K"]).copy(); d_k = m_k.frame(d_k)     # adds blended_K_stuff (own K%, league, stuff prior)
     d_bb = feat.dropna(subset=BB_SPEC_BLENDED).copy()
-    d_k["proj_K_rate"] = m_k.predict(d_k)
+    d_k["proj_K_rate"] = m_k.ols.predict(d_k)
     d_bb["proj_BB_rate"] = m_bb.predict(d_bb)
 
     # Prediction uncertainty: OBSERVATION-level SE (se_obs includes both
@@ -408,7 +412,7 @@ def build_2027_projections(raw, m_k, m_bb, n0_bridge_bb: float, rho_kbb: float, 
     # Same reliability weight used for FITTING is reused here for scoring.
     w_k_new = mm.reliability_weight(d_k["PA_model"], n0_k).values
     w_bb_new = mm.reliability_weight(d_bb["PA_model"], n0_bb).values
-    d_k["proj_K_rate_se"] = m_k.get_prediction(d_k, weights=w_k_new).se_obs * K_SE_CALIBRATION
+    d_k["proj_K_rate_se"] = m_k.ols.get_prediction(d_k, weights=w_k_new).se_obs * K_SE_CALIBRATION
     d_bb["proj_BB_rate_se"] = m_bb.get_prediction(d_bb, weights=w_bb_new).se_obs
 
     out = feat[["pitcher_id", "pitcher", "team", "PA", "PA_model", "naive_K_rate", "naive_BB_rate", "blended_BB_rate",
@@ -417,7 +421,7 @@ def build_2027_projections(raw, m_k, m_bb, n0_bridge_bb: float, rho_kbb: float, 
                 "wh_sva_level", "stuff_plus", "horiz_var", "vert_var", "command_score",
                 "spin_z_norm", "extension",
                 "PA_2025", "k_rate_2025", "bb_rate_2025", "PA_2026", "k_rate_2026", "bb_rate_2026"]].copy()
-    out = out.merge(d_k[["pitcher_id", "proj_K_rate", "proj_K_rate_se"]], on="pitcher_id", how="left")
+    out = out.merge(d_k[["pitcher_id", "blended_K_stuff", "proj_K_rate", "proj_K_rate_se"]], on="pitcher_id", how="left")
     out = out.merge(d_bb[["pitcher_id", "proj_BB_rate", "proj_BB_rate_se"]], on="pitcher_id", how="left")
     out["proj_basis"] = np.where(out["PA"].fillna(0) > 0, "recent", np.where(out["proj_K_rate"].notna(), "gap_prior", "none"))
     out["PA"] = out["PA"].fillna(0)   # true 2026 PA (the gap prior's discounted PA lives in PA_model)
@@ -605,9 +609,9 @@ def project_from_college_stats(k_pct: float, bb_pct_multi: float, m_k, m_bb, bri
     fl_k_rate_bridge = float(bridge_model["k_model"].predict(row_k).iloc[0])
     fl_bb_rate_bridge = float(bridge_model["bb_model"].predict(row_bb).iloc[0])
 
-    k_row = pd.DataFrame([{"naive_K_rate": lg_k_rate, "fl_k_rate_bridge": fl_k_rate_bridge,
+    k_row = pd.DataFrame([{"naive_K_rate": lg_k_rate, "PA": 0.0, "fl_k_rate_bridge": fl_k_rate_bridge,
                             "wh_sva_level": wh_sva_mean, "spin_z_norm": spin_z_norm_mean,
-                            "extension": extension_mean}])
+                            "extension": extension_mean, "lg_k_frame": lg_k_rate, "n0_k_frame": m_k.n0_k}])
     blended_bb = mm.blended_rate(0.0, 0.0, n0_bb, lg_bb_rate, n0_bridge_bb, fl_bb_rate_bridge)
     bb_row = pd.DataFrame([{"blended_BB_rate": blended_bb, "command_score": command_score_mean}])
     # same league-level recentering the roster projections get (see
@@ -627,8 +631,8 @@ def project_from_bridge_rates(fl_k_rate_bridge: float, fl_bb_rate_bridge: float,
     same neutral-imputation convention as project_from_college_stats (naive rate = league mean,
     stuff/command = population means), with the bridge rates already computed by
     fl_unified_bridge.translate()."""
-    k_row = pd.DataFrame([{"naive_K_rate": lg_k_rate, "fl_k_rate_bridge": fl_k_rate_bridge,
-                            "wh_sva_level": wh_sva_mean, "spin_z_norm": spin_z_norm_mean, "extension": extension_mean}])
+    k_row = pd.DataFrame([{"naive_K_rate": lg_k_rate, "PA": 0.0, "fl_k_rate_bridge": fl_k_rate_bridge, "wh_sva_level": wh_sva_mean,
+                            "spin_z_norm": spin_z_norm_mean, "extension": extension_mean, "lg_k_frame": lg_k_rate, "n0_k_frame": m_k.n0_k}])
     blended_bb = mm.blended_rate(0.0, 0.0, n0_bb, lg_bb_rate, n0_bridge_bb, fl_bb_rate_bridge)
     bb_row = pd.DataFrame([{"blended_BB_rate": blended_bb, "command_score": command_score_mean}])
     proj_k = float(m_k.predict(k_row).iloc[0]) - level_shift_k
@@ -650,7 +654,9 @@ def save_model_coefs(path, m_k, m_bb, bridge_coefs: dict,
     see DECISION_LOG.md), but .params has the same shape as the college
     bridge's OLS fit, so this is the same payload shape for all three."""
     payload = {
-        "k_model": {k: float(v) for k, v in m_k.params.items()},
+        "k_model": {k: float(v) for k, v in m_k.params.items()},       # regressors: blended_K_stuff (own K%, league, stuff prior), fl_k_rate_bridge, spin_z_norm, extension
+        "k_prior": m_k.prior_dict(),                                    # stuff prior: P_stuff = lg + c*(stuff - stuff_mean), pseudo-PA n0_s
+        "n0_k": float(m_k.n0_k),
         "bb_model": {k: float(v) for k, v in m_bb.params.items()},
         # the ONE unified other-league bridge (shrinkage, decay, staleness damping, pooled mapping)
         "bridge_unified": bridge_coefs,

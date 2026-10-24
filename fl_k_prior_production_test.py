@@ -33,15 +33,16 @@ def frames(raw, est):
 def main():
     raw = ppf.exclude(fp.load_fl_pitches_cached()); out = {}; P = {}
     lg_tr = t.league_k(raw, [(bt.START_2025, bt.END_2025)]); lg_f2 = t.league_k(raw, [(bt.START_2025, bt.END_2025), (bt.START_2026, bt.CUTOFF_2026)])
-    for est in ("xgb", "torch3"):
+    for est in ("xgb", "torch3", "swstr_ct"):
         tr, n0_k, f2, n0_k2 = frames(raw, est); d = tr.dropna(subset=["K_rate_actual"] + ADD).copy(); w = mm.reliability_weight(d["PA_test"], n0_k).values
         x = f2.dropna(subset=ADD + ["K_rate_actual"]).copy(); x["lg_k_frame"] = lg_f2; x["n0_k_frame"] = n0_k2
         m_add = bt.fit_weighted(d, "K_rate_actual", ADD, w); m_pr = kp.fit(d, n0_k, lg_tr, w)
         print(f"[{est}] NLS prior: c={m_pr.c:.4f} (OLS slope {m_pr.c0:.4f}, x{m_pr.c / m_pr.c0:.2f}), n0_s={m_pr.n0_s:.1f}; params {m_pr.params.round(4).to_dict()}", flush=True)
         P[est] = pd.DataFrame({"additive": m_add.predict(x).to_numpy(), "prior": m_pr.predict(x).to_numpy()}, index=x["pitcher_id"].to_numpy()); out[est] = {"c": m_pr.c, "n0_s": m_pr.n0_s, "c0": m_pr.c0}
         P[est + "_meta"] = x.set_index("pitcher_id")[["K_rate_actual", "PA_test", "PA"]]
-    ids = sorted(set(P["xgb"].index) & set(P["torch3"].index)); meta = P["xgb_meta"].loc[ids]; y = meta["K_rate_actual"].to_numpy(); n_t = meta["PA_test"].to_numpy(); ids_a = np.array(ids)
-    preds = {"BEFORE: additive XGBoost (published)": P["xgb"].loc[ids, "additive"].to_numpy(), "additive network": P["torch3"].loc[ids, "additive"].to_numpy(), "prior XGBoost (NLS)": P["xgb"].loc[ids, "prior"].to_numpy(), "AFTER: prior network (NLS)": P["torch3"].loc[ids, "prior"].to_numpy()}
+    ids = sorted(set(P["xgb"].index) & set(P["torch3"].index) & set(P["swstr_ct"].index)); meta = P["xgb_meta"].loc[ids]; y = meta["K_rate_actual"].to_numpy(); n_t = meta["PA_test"].to_numpy(); ids_a = np.array(ids)
+    preds = {"BEFORE: additive XGBoost (published)": P["xgb"].loc[ids, "additive"].to_numpy(), "additive network": P["torch3"].loc[ids, "additive"].to_numpy(), "prior XGBoost (NLS)": P["xgb"].loc[ids, "prior"].to_numpy(), "AFTER: prior network (NLS)": P["torch3"].loc[ids, "prior"].to_numpy(),
+             "additive swstr_ct": P["swstr_ct"].loc[ids, "additive"].to_numpy(), "prior swstr_ct (NLS)": P["swstr_ct"].loc[ids, "prior"].to_numpy()}
     base = preds["BEFORE: additive XGBoost (published)"]; w = ew.weights_from_base(y, base, n_t)[0]; cen = lambda p: p + np.average(y - p, weights=w); rows = []
     for lab, p in preds.items():
         rm, ma = er.wmetrics(y, cen(p), w); r = {"model": lab, "RMSE": rm, "MAE": ma}
@@ -58,6 +59,8 @@ def main():
                 r[lab.split(":")[0]] = float(np.sqrt(np.average((y[m] - cen(p)[m]) ** 2, weights=w[m])))
             rows3.append(r)
     print("\nWEIGHTED RMSE BY PA TIER\n" + pd.DataFrame(rows3).round(5).to_string(index=False))
+    cmp = er.compare(y, cen(preds["AFTER: prior network (NLS)"]), cen(preds["prior swstr_ct (NLS)"]), w, ids_a, n=1000)
+    print("\nprior swstr_ct vs prior network (swing-based): dRMSE %+.5f %s P=%.3f; dMAE %+.5f %s P=%.3f" % (cmp["dRMSE"], cmp["RMSE 90%"], cmp["P(RMSE better)"], cmp["dMAE"], cmp["MAE 90%"], cmp["P(MAE better)"]))
     json.dump({"fit": out, "table": rows, "tiers": rows3}, open("output/k_prior_production_test.json", "w"), indent=1, default=float)
 
 

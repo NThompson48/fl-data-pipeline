@@ -310,6 +310,8 @@ def compute_pooled_wh_sva(df: pd.DataFrame, min_rows: int = 2000, estimator: str
         return compute_pooled_wh_sva_xgb(df, min_rows)
     if est == "torch3":
         return _wh_sva_torch3(df, min_rows)
+    if est == "swstr_ct":
+        return _wh_sva_swstr_ct(df, min_rows)
     raise ValueError(f"unknown wh_sva estimator {est!r}")
 
 
@@ -331,6 +333,39 @@ def _wh_sva_torch3(df: pd.DataFrame, min_rows: int = 2000) -> pd.DataFrame:
     r = subprocess.run([sys.executable, os.path.join(here, "fl_wh_sva_nn_worker.py"), fin, fout], cwd=here, env=dict(os.environ, PYTHONIOENCODING="utf-8"))
     if r.returncode != 0 or not os.path.exists(fout):
         raise RuntimeError("fl_wh_sva_nn_worker.py failed (see its output above)")
+    out = pd.read_parquet(fout)
+    for p in (fin, fout):
+        os.remove(p)
+    _NN_CACHE[key] = out; return out.copy()
+
+
+_BALL = {"ball_called", "ball_in_dirt", "ball_intentional"}; _STRIKE = {"strike_called", "strike_swinging", "foul_not_fieldable", "foul_fieldable"}
+
+
+def add_count(raw: pd.DataFrame) -> pd.DataFrame:
+    """balls / strikes before each pitch, rebuilt from the pitch sequence within the plate appearance (the pitch cache has no count; checked: strikeouts arrive at 2 strikes 99.3%, walks at 3 balls 98.7%)."""
+    r = raw.sort_values(["game_id", "pa_id", "pitch_no"], kind="mergesort").copy(); key = [r["game_id"].astype(str), r["pa_id"]]
+    b = r["pitch_call"].isin(_BALL).astype(int); s = r["pitch_call"].isin(_STRIKE).astype(int)
+    r["balls"] = np.minimum(3, b.groupby(key).cumsum() - b); r["strikes"] = np.minimum(2, s.groupby(key).cumsum() - s); return r
+
+
+def _wh_sva_swstr_ct(df: pd.DataFrame, min_rows: int = 2000) -> pd.DataFrame:
+    """PER-PITCH swinging-strike stuff (user 2026-10-24): P(swstr | 9 inputs, pitch type, count) - P(swstr | location, pitch type, count), network, cross-fitted by pitcher; level = mean over ALL a pitcher's pitches (fl_wh_sva_swstr_worker.py)."""
+    import os
+    import subprocess
+    import sys
+    cols = FULL_COLS + ["pitcher_id", "date", "game_id", "pa_id", "pitch_no", "pitch_type", "balls", "strikes", "target"]
+    d = add_count(df[df["pitch_call"] != "undefined"]); d["target"] = (d["is_swing"] & d["is_whiff"]).astype(int); pop = d.dropna(subset=[c for c in cols if c != "pitch_type"]).copy(); pop["pitch_type"] = pop["pitch_type"].fillna("unk")
+    if len(pop) < min_rows:
+        return pd.DataFrame(columns=["pitcher_id", "date", "game_id", "pa_id", "pitch_no", "sva"])
+    key = int(pd.util.hash_pandas_object(pop[["pitcher_id", "game_id", "pa_id", "pitch_no"]].astype(str), index=False).sum()) + 1
+    if key in _NN_CACHE:
+        return _NN_CACHE[key].copy()
+    here = os.path.dirname(os.path.abspath(__file__)); tmp = os.path.join(here, "output", "tmp_nn"); os.makedirs(tmp, exist_ok=True)
+    fin, fout = os.path.join(tmp, f"sin_{key}.parquet"), os.path.join(tmp, f"sout_{key}.parquet"); pop[cols].to_parquet(fin, index=False)
+    r = subprocess.run([sys.executable, os.path.join(here, "fl_wh_sva_swstr_worker.py"), fin, fout], cwd=here, env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+    if r.returncode != 0 or not os.path.exists(fout):
+        raise RuntimeError("fl_wh_sva_swstr_worker.py failed (see its output above)")
     out = pd.read_parquet(fout)
     for p in (fin, fout):
         os.remove(p)
