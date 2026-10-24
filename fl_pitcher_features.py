@@ -298,7 +298,46 @@ def compute_fb_zone_pct(df: pd.DataFrame, min_fb: int = 1) -> pd.DataFrame:
     return agg[agg["fb_n"] >= min_fb]
 
 
-def compute_pooled_wh_sva(df: pd.DataFrame, min_rows: int = 2000) -> pd.DataFrame:
+WH_SVA_ESTIMATOR = "xgb"      # 'xgb' (original; the default, so every script that does not choose keeps its numbers) or 'torch3'; fl_production_projection.py sets 'torch3' for the 2027 pitcher projection
+_NN_CACHE = {}
+
+
+def compute_pooled_wh_sva(df: pd.DataFrame, min_rows: int = 2000, estimator: str | None = None) -> pd.DataFrame:
+    """Per-swing stuff value (sva) with the chosen estimator: 'xgb' = the original XGBoost pair, 'torch3' = PyTorch MLPs averaged over 3 seeds (fl_wh_sva_nn_worker.py, run as a separate process).
+    Same inputs, same pitcher-held-out cross-fit, same output columns."""
+    est = estimator or WH_SVA_ESTIMATOR
+    if est == "xgb":
+        return compute_pooled_wh_sva_xgb(df, min_rows)
+    if est == "torch3":
+        return _wh_sva_torch3(df, min_rows)
+    raise ValueError(f"unknown wh_sva estimator {est!r}")
+
+
+def _wh_sva_torch3(df: pd.DataFrame, min_rows: int = 2000) -> pd.DataFrame:
+    import os
+    import subprocess
+    import sys
+    cols = FULL_COLS + ["pitcher_id", "is_whiff", "date", "game_id", "pa_id", "pitch_no"]
+    pop = df[df["is_swing"]].dropna(subset=cols).copy()
+    if len(pop) < min_rows:
+        print(f"  [pooled wh_sva, torch3] only {len(pop)} rows -- skipping")
+        return pd.DataFrame(columns=["pitcher_id", "date", "game_id", "pa_id", "pitch_no", "sva"])
+    key = int(pd.util.hash_pandas_object(pop[["pitcher_id", "game_id", "pa_id", "pitch_no"]].astype(str), index=False).sum())
+    if key in _NN_CACHE:
+        return _NN_CACHE[key].copy()
+    here = os.path.dirname(os.path.abspath(__file__)); tmp = os.path.join(here, "output", "tmp_nn"); os.makedirs(tmp, exist_ok=True)
+    fin, fout = os.path.join(tmp, f"in_{key}.parquet"), os.path.join(tmp, f"out_{key}.parquet")
+    pop[cols].to_parquet(fin, index=False)
+    r = subprocess.run([sys.executable, os.path.join(here, "fl_wh_sva_nn_worker.py"), fin, fout], cwd=here, env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+    if r.returncode != 0 or not os.path.exists(fout):
+        raise RuntimeError("fl_wh_sva_nn_worker.py failed (see its output above)")
+    out = pd.read_parquet(fout)
+    for p in (fin, fout):
+        os.remove(p)
+    _NN_CACHE[key] = out; return out.copy()
+
+
+def compute_pooled_wh_sva_xgb(df: pd.DataFrame, min_rows: int = 2000) -> pd.DataFrame:
     """Swing-conditioned, pooled-across-pitch-type shape-value-added at the per-pitch
     level: P(whiff | swing, location+shape)_oof - P(whiff | swing, location)_oof,
     via GroupKFold(5, groups=pitcher_id) so no pitcher's own pitches inform their own

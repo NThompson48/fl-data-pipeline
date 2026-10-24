@@ -671,6 +671,7 @@ def save_model_coefs(path, m_k, m_bb, bridge_coefs: dict,
 
 
 if __name__ == "__main__":
+    fp.WH_SVA_ESTIMATOR = "torch3"      # user 2026-10-23: the neural-network stuff estimator feeds the 2027 pitcher projection (the frozen K% model is refit with it below; ROS keeps its own, XGBoost, until validated)
     print("Loading cached FL pitches...")
     raw = fp.load_fl_pitches_cached()
     import fl_position_player_flag as ppf

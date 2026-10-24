@@ -4790,3 +4790,24 @@ READING: the user's framing holds: stuff is the better signal for roughly the fi
 .0010-.0021 RMSE (about 2-4% of the .049 level) for pitchers with under about 150 swings; none beyond about 250.  The network's advantage over production is real in direction and size but not tested formally.
 NEXT (not run): (1) paired network-vs-production test inside the prior model; (2) fit the prior on POOLED N (one a, c, n0' for all N) and compare it with a constant-weight add-on on mixed-N pitchers (the K% model's situation);
 (3) the same structure for K% with thin-history pitchers (rookies included).
+
+### 2026-10-23 -- Neural-network stuff in the pitcher projection; stuff as a fading PRIOR in K% (user: "Let's add the neural network into the projection model" / "let's add it as a prior and report the updated results")
+INTEGRATION BUILT: fl_wh_sva_nn_worker.py runs the 3-seed PyTorch stuff model as a SEPARATE PROCESS (torch must be imported before xgboost / scikit-learn on this machine); fl_pitcher_features.compute_pooled_wh_sva(df, min_rows, estimator=None)
+dispatches on fp.WH_SVA_ESTIMATOR ('xgb' default, so every other script keeps its numbers; 'torch3'); fl_production_projection.py __main__ sets 'torch3' (the frozen K% model refits its stuff coefficient with it); ROS keeps XGBoost until
+validated.  Worker fidelity check: same rows / order as the in-process network used in all tests, max |sva difference| 0.0 over 44,436 swings; repeat calls cached; default estimator unchanged.  Published outputs NOT yet rebuilt.
+STANDARD BEFORE / AFTER (fl_wh_sva_torch3_k_test.py; production code path; K% fold 2, n = 256, level-free, frozen weights): production XGBoost RMSE .05501 / MAE .04406 -> network (constant weight) .05475 (-.00026, [-.00091, +.00039],
+P(better) .76) / .04364 (-.00041, P .86); stuff coefficient .539 (t 2.4) -> .490 (t 2.8); BB% unchanged (dRMSE 0.00000); reliability of the pitcher level split-half r .904 -> .928 (S-B .949 -> .963, n0 56 -> 41 pitches), corr with K%
+(same period) .519 -> .555.  STOP RULE (worse on both with P <= .10) not triggered -> switch stands.
+STUFF AS A FADING PRIOR (fl_wh_sva_prior_k_test.py; BB%-bridge precedent: mm.blended_rate / fit_n0_bridge): P_stuff = lg + c * (stuff - mean); blended_K = (K_count + n0 * lg + n0_s * P_stuff) / (PA + n0 + n0_s); K% model = WLS on
+[blended_K, fl_k_rate_bridge, spin_z_norm, extension].  Fitted on the training transition (full 2025 -> 1H2026, n = 129): XGBoost c multiplier 1.5 (OLS slope 1.03), n0_s 131 pseudo-PA; network c multiplier 1.5 (slope .86), n0_s 136; n0 league 64.7.
+RESULTS (fold 2, n = 256; RMSE / MAE; vs production additive-XGBoost with P(better) RMSE / MAE): additive_xgb .05501 / .04406 | nostuff control .05450 / .04321 (-.00051 P .76 / -.00085 P .93) | prior_xgb .05468 / .04369 (-.00034 P .92 /
+-.00037 P .94) | additive_nn .05475 / .04364 (-.00026 P .76 / -.00041 P .87) | prior_nn .05449 / .04331 (-.00053 P .88 / -.00075 P .95).  Paired, same estimator additive -> prior: XGBoost -.00034 (P .94) / -.00037 (P .95) PASSES the
+pre-stated .90 rule; network -.00027 (P .85) / -.00034 (P .90) just short on RMSE.  XGBoost -> network inside the prior form: -.00019 (P .72) / -.00039 (P .87).
+BY FEATURE-WINDOW PA TIER (weighted RMSE; additive_xgb / nostuff / prior_xgb / additive_nn / prior_nn): thin < 100 PA (n 97) .05988 / .06023 / .05997 / .06041 / .06050; mid 100-250 (n 86) .05494 / .05444 / .05469 / .05494 / .05458;
+thick > 250 (n 73) .05040 / .04894 / .04952 / .04902 / .04846.
+READING: (1) the improvements are mostly REMOVING a harm: today's constant-weight stuff term adds noise for established pitchers (thick tier .0504 -> .0485-.0490 with a fading prior or no stuff); prior_nn is statistically level with the
+no-stuff control (.05449 vs .05450 RMSE, .04331 vs .04321 MAE); (2) the thin tier does not show a stuff gain for the network (n 97; XGBoost versions marginally better than no stuff, network worse by about .0006, within noise);
+(3) the fading prior is never clearly worse than the constant-weight form and is the best stuff-containing model overall; (4) this fold is the one the 2026-10-13 entry flagged ('the stuff term adds little held out'); earlier folds
+validated the stuff term as a small win (ROS reverse check dRMSE -.0009, P .90), so one fold cannot justify removing it.
+OPEN (asked of the user): fading prior with the network (touches the K% spec, prospect / lookup paths, coefficient file, dashboard calculators and the pitcher 'How it adds up' table) vs drop stuff from K% (display-only Stuff+) vs network with the
+constant weight (no refactor).
