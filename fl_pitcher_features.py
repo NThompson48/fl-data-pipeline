@@ -312,6 +312,8 @@ def compute_pooled_wh_sva(df: pd.DataFrame, min_rows: int = 2000, estimator: str
         return _wh_sva_torch3(df, min_rows)
     if est == "swstr_ct":
         return _wh_sva_swstr_ct(df, min_rows)
+    if est in ("strike_loc", "strike_ct"):
+        return _wh_sva_strike(df, est.split("_")[1], min_rows)
     raise ValueError(f"unknown wh_sva estimator {est!r}")
 
 
@@ -366,6 +368,32 @@ def _wh_sva_swstr_ct(df: pd.DataFrame, min_rows: int = 2000) -> pd.DataFrame:
     r = subprocess.run([sys.executable, os.path.join(here, "fl_wh_sva_swstr_worker.py"), fin, fout], cwd=here, env=dict(os.environ, PYTHONIOENCODING="utf-8"))
     if r.returncode != 0 or not os.path.exists(fout):
         raise RuntimeError("fl_wh_sva_swstr_worker.py failed (see its output above)")
+    out = pd.read_parquet(fout)
+    for p in (fin, fout):
+        os.remove(p)
+    _NN_CACHE[key] = out; return out.copy()
+
+
+_STRIKE_CALLS = {"strike_called", "strike_swinging", "foul_not_fieldable", "foul_fieldable", "foul_ball"}; _BALL_CALLS = {"ball_called", "ball_in_dirt"}
+
+
+def _wh_sva_strike(df: pd.DataFrame, mode: str, min_rows: int = 2000) -> pd.DataFrame:
+    """STRIKE stuff (user 2026-10-25): P(strike | stuff, location [, count]) - P(strike | location [, count]) per pitch, network, cross-fitted by pitcher (fl_wh_sva_strike_worker.py).  strike = called / swinging / foul, ball = called / in dirt."""
+    import os
+    import subprocess
+    import sys
+    cols = FULL_COLS + ["pitcher_id", "date", "game_id", "pa_id", "pitch_no", "balls", "strikes", "target"]
+    d = add_count(df[df["pitch_call"] != "undefined"]); d = d[d["pitch_call"].isin(_STRIKE_CALLS | _BALL_CALLS)].copy(); d["target"] = d["pitch_call"].isin(_STRIKE_CALLS).astype(int); pop = d.dropna(subset=cols).copy()
+    if len(pop) < min_rows:
+        return pd.DataFrame(columns=["pitcher_id", "date", "game_id", "pa_id", "pitch_no", "sva"])
+    key = int(pd.util.hash_pandas_object(pop[["pitcher_id", "game_id", "pa_id", "pitch_no"]].astype(str), index=False).sum()) + (2 if mode == "loc" else 3)
+    if key in _NN_CACHE:
+        return _NN_CACHE[key].copy()
+    here = os.path.dirname(os.path.abspath(__file__)); tmp = os.path.join(here, "output", "tmp_nn"); os.makedirs(tmp, exist_ok=True)
+    fin, fout = os.path.join(tmp, f"tin_{key}.parquet"), os.path.join(tmp, f"tout_{key}.parquet"); pop[cols].to_parquet(fin, index=False)
+    r = subprocess.run([sys.executable, os.path.join(here, "fl_wh_sva_strike_worker.py"), fin, fout, mode], cwd=here, env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+    if r.returncode != 0 or not os.path.exists(fout):
+        raise RuntimeError("fl_wh_sva_strike_worker.py failed (see its output above)")
     out = pd.read_parquet(fout)
     for p in (fin, fout):
         os.remove(p)
