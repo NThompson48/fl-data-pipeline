@@ -31,6 +31,8 @@ def _job(seed, tr, te, X, y, g, train_mask):
 def compute(pop, mode="whiff"):
     """mode 'whiff': P(whiff | swing, stuff), trained on swings.  mode 'swstr': P(swinging strike | stuff) per PITCH, trained on every pitch (target = swing and whiff)."""
     sw = pop["is_swing"].to_numpy().astype(bool); wh = pop["is_whiff"].fillna(0).astype(int).to_numpy(); y = wh if mode == "whiff" else (sw & (wh == 1)).astype(int); train_mask = sw if mode == "whiff" else np.ones(len(y), dtype=bool)
+    if mode == "strike":                       # P(strike | stuff): called / swinging / foul vs ball, every pitch in the population, column 'target' prepared by the caller
+        y = pop["target"].astype(int).to_numpy()
     g = pop["pitcher_id"].to_numpy(); X = pop[STUFF].astype(float).to_numpy(); folds = list(GroupKFold(n_splits=5).split(X, y, g)); O = {}
     for seed, te, p in Parallel(n_jobs=8, backend="loky")(delayed(_job)(s, tr, te, X, y, g, train_mask) for s in SEEDS for tr, te in folds):
         O.setdefault(seed, np.zeros(len(y)))[te] = p
