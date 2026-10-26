@@ -314,6 +314,8 @@ def compute_pooled_wh_sva(df: pd.DataFrame, min_rows: int = 2000, estimator: str
         return _wh_sva_swstr_ct(df, min_rows)
     if est in ("strike_loc", "strike_ct"):
         return _wh_sva_strike(df, est.split("_")[1], min_rows)
+    if est in ("swstr_ct_xgb", "swstr_stuff_xgb"):
+        return _wh_sva_xgb_swstr(df, est == "swstr_ct_xgb")
     if est in ("whiff_stuff", "whiff_stuff_sw", "swstr_stuff", "strike_stuff"):
         return _wh_sva_whiffstuff(df, est == "whiff_stuff_sw", min_rows, mode={"swstr_stuff": "swstr", "strike_stuff": "strike"}.get(est, "whiff"))
     raise ValueError(f"unknown wh_sva estimator {est!r}")
@@ -400,6 +402,26 @@ def _wh_sva_strike(df: pd.DataFrame, mode: str, min_rows: int = 2000) -> pd.Data
     for p in (fin, fout):
         os.remove(p)
     _NN_CACHE[key] = out; return out.copy()
+
+
+def _wh_sva_xgb_swstr(df: pd.DataFrame, ct: bool) -> pd.DataFrame:
+    """XGBoost versions of the per-pitch swinging-strike stuff measures (in-process, deterministic, cross-fitted by pitcher, 5 folds, production XGB_PARAMS).
+    ct=True  (swstr_ct_xgb):    P(swstr | 9 inputs, balls, strikes, pitch type one-hot) - P(swstr | location, balls, strikes, pitch type one-hot)
+    ct=False (swstr_stuff_xgb): P(swstr | 7 stuff inputs), no baseline subtracted (centred)."""
+    d = add_count(df[df["pitch_call"] != "undefined"]); stuff = [c for c in FULL_COLS if c not in LOC_COLS]; keys = ["pitcher_id", "date", "game_id", "pa_id", "pitch_no"]
+    pop = d.dropna(subset=(FULL_COLS + ["balls", "strikes"] if ct else stuff) + keys).copy(); y = (pop["is_swing"] & pop["is_whiff"]).astype(int).to_numpy(); g = pop["pitcher_id"].to_numpy()
+
+    def cv(X):
+        p = np.zeros(len(y))
+        for tr, te in GroupKFold(n_splits=5).split(X, y, g):
+            p[te] = XGBClassifier(**{**XGB_PARAMS, "n_jobs": 8}).fit(X[tr], y[tr]).predict_proba(X[te])[:, 1]
+        return p
+    if ct:
+        oh = pd.get_dummies(pop["pitch_type"].fillna("unk").replace("", "unk")).astype(float).to_numpy()
+        sva = cv(np.column_stack([pop[FULL_COLS + ["balls", "strikes"]].astype(float).to_numpy(), oh])) - cv(np.column_stack([pop[LOC_COLS + ["balls", "strikes"]].astype(float).to_numpy(), oh]))
+    else:
+        p = cv(pop[stuff].astype(float).to_numpy()); sva = p - p.mean()
+    return pop[keys].assign(sva=sva)
 
 
 def _wh_sva_whiffstuff(df: pd.DataFrame, swings_only: bool, min_rows: int = 2000, mode: str = "whiff") -> pd.DataFrame:
