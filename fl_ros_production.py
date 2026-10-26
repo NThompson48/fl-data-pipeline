@@ -35,7 +35,8 @@ warnings.filterwarnings("ignore")
 SC = 1.0175
 BF_PER_IP = ra9.LEAGUE_BF_PER_IP
 CUTS = wl.CUTS
-STUFF_B = {"clean": (0.929, 0.030), "pooled": (0.958, 0.0345)}       # (K% per wh_sva unit, BB% per command_score inch): 2025-only fit (for scoring 2026) / pooled 2025-26 fit (live use)
+ROS_STUFF_ESTIMATOR = "swstr_ct"       # user 2026-10-25 ("Do it"): the per-pitch swinging-strike stuff network (pitch type + count) feeds the ROS K% power prior (was the XGBoost wh_sva); set when a PitcherContext is built, i.e. before reliability() and the snapshots
+STUFF_B = {"clean": (1.886, 0.030), "pooled": (1.896, 0.0345)}       # (K% per stuff unit, BB% per command_score inch): 2025-only fit (for scoring 2026) / pooled 2025-26 fit (live use).  K% values are the swstr_ct fits (fl_ros_stuff_estimator_test.py: stage 1 on the 2025 rows with the 2025 K% n0 129.5; pooled 2025+2026 rows with n0 113 -- the same procedure reproduced the old XGBoost .958 as .960); BB% unchanged.  Old XGBoost values: K% .929 / .958
 LUCK_A, LUCK_B = 0.000266, 0.4545                                      # hitter wOBA error law
 FLD_N0, POS_N0, FLD_RESID, POS_RESID = 200.0, 100.0, 6.2 / 600, 6.0 / 600
 HIT_PA_SD, PIT_BF_SD = 70.0, 68.0                                      # workload RMSE from the backtest (activity rule)
@@ -126,6 +127,7 @@ def hitter_snapshot(T_h, year, asof, wfit, delta_seasons, mis_share=0.5):
 # ---------------------------------------------------------------------------------------------------------------------------------- pitchers
 class PitcherContext:
     def __init__(self, T_p):
+        fp.WH_SVA_ESTIMATOR = ROS_STUFF_ESTIMATOR
         self.raw = fp.load_fl_pitches_cached(); self.names = pst.idmap(self.raw)
         self.war = read_sql_df(text("select player, year, bf, ip, so, bb, ra, ra9, rar, ppf, g from war_pitchers where game_type='reg_season'"))
         self.war["name_clean"] = self.war["player"].apply(ip.lastfirst_to_clean)
