@@ -61,6 +61,8 @@ def run(spec, D, fold, design):
             else:
                 jobs.append((k, tag, 0, delayed(_xgb)(X[tr], y[tr], X[te])))
     res = Parallel(n_jobs=8, backend="loky")([j[3] for j in jobs]); P = {}
+    from joblib.externals.loky import get_reusable_executor
+    get_reusable_executor().shutdown(wait=True)             # fresh worker processes for the next measure: on this Windows machine torch fails to load in a worker that already imported xgboost
     for (k, tag, s, _), p in zip(jobs, res):
         P.setdefault((k, tag), []).append(p)
     for k in range(K):
@@ -82,7 +84,7 @@ def main():
     out = {}; base = pd.concat([n_thrown[2025].rename("n25"), n_thrown[2026].rename("n26")], axis=1).dropna(); base.index = base.index.astype(str)
     for design in ("fwd25", "rev26"):
         L = {}
-        for name, spec in SPECS.items():
+        for name, spec in sorted(SPECS.items(), key=lambda kv: kv[1]["m"] != "net"):      # network measures first
             r = run(spec, D, fold, design); L[name] = {yr: r[r["year"] == yr].groupby("pitcher_id")["sva"].mean() for yr in (2025, 2026)}
             pd.DataFrame({yr: L[name][yr] for yr in (2025, 2026)}).to_csv(f"output/y2y_heldout_{design}_{name.replace(' ', '_').replace('|', '-').replace('(', '').replace(')', '')}.csv"); print(f"  {design} {name} done", flush=True)
         sw = {yr: S[yr][S[yr]["is_swing"]].groupby("pitcher_id")["is_whiff"].mean() for yr in S}; sp = {yr: (S[yr]["is_swing"] & S[yr]["is_whiff"]).groupby(S[yr]["pitcher_id"]).mean() for yr in S}
