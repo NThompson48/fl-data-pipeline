@@ -71,7 +71,7 @@ def fit(raw, name):
 
 def predictions(raw, M, test):
     d, n0_k, n0_bb, lg_k, lg_bb = combined(raw, test); res = {}
-    tk = d.dropna(subset=["K_rate_actual"] + BASE_K + list(EST)).copy().rename(columns={"pub": "wh_sva_level"}); tk["sw"], tk["ss"], tk["st"], tk["net"] = tk["sw"], tk["ss"], tk["st"], tk["net"]
+    tk = d.dropna(subset=["K_rate_actual"] + BASE_K + list(EST)).copy().rename(columns={"pub": "wh_sva_level"})
     P = {k: M["K"][k].predict(tk).to_numpy() for k in EST}; res["K"] = (tk["K_rate_actual"].to_numpy(), tk["PA_test"].to_numpy(), tk["pitcher_id"].to_numpy(), P)
     need = ["BB_rate_actual", "naive_BB_rate", "fl_bb_rate_bridge", "PA", "command_score"] + list(EST); tb = d.dropna(subset=need).copy(); tb["BB_raw"] = tb["naive_BB_rate"] * (tb["PA"] + n0_bb) - n0_bb * lg_bb
     tb["blended_BB_rate"] = mm.blended_rate(tb["BB_raw"], tb["PA"], n0_bb, lg_bb, M["n0_bridge_bb"], tb["fl_bb_rate_bridge"]); PB = {k: M["BB"][k].predict(tb).to_numpy() for k in bb_specs()}
