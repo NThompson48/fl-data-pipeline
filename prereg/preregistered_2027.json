@@ -79,7 +79,8 @@
    "success": "KEEP swstr_ct if RMSE and MAE are both better than the counterfactual with P(better) >= .90 in the preseason sample; REVERT to the XGBoost stuff term if both are worse with P(worse) >= .90 in the preseason sample; otherwise inconclusive, keep and decide from the in-season sample and the stability report",
    "report_only": "2026 -> 2027 year-to-year correlation of the stuff level on pitchers with >= 300 pitches in both seasons, fl_y2y_heldout design (frozen model trained on one season, held-out pitchers): swstr_ct (network) vs XGBoost wh_sva; at 2026-10-26 these were .78-.79 vs .84 (difference not significant)",
    "added": "2026-10-26 (before any 2027 data)"
-  }
+  },
+  "C11 fastball-blend command term for BB% (report only)": "C11 (report only): preseason pitcher BB% with the fastball-blend command term (average of the all-pitch Command Score and the frozen-formula score on four-seams + sinkers, >= 50 fastballs) vs production; weighted RMSE / MAE, level-free, frozen standard weights, pitcher bootstrap; no production change"
  },
  "frozen": {
   "p:k:fb_velo": {
@@ -113,6 +114,11 @@
    "ros_B_xgb": 0.958,
    "n_pitchers": 732,
    "projections_file": "prereg/c10_frozen_projections.json"
+  },
+  "p:bb:c11": {
+   "b_command_score": 0.012134409095488543,
+   "n_pitchers": 732,
+   "projections_file": "prereg/fastball_blend_frozen_2027.json"
   }
  },
  "amendments": [
@@ -127,6 +133,10 @@
   {
    "date": "2026-10-27",
    "note": "Outlier watch list recorded before any 2027 data (prereg/outlier_watchlist_2027.md / .json; report only, no production change): isolation-forest outlier pitchers (top 5% / 10% by mean score) and outlier pitch types; after 2027 compare flagged pitchers' K% with the frozen projections (prereg/c10_frozen_projections.json)"
+  },
+  {
+   "date": "2026-10-27",
+   "note": "C11 added before any 2027 data (report only, no production change): fastball-blend command term vs production for pitcher BB%; production and counterfactual 2027 projections frozen (prereg/fastball_blend_frozen_2027.json). Evidence: walk-forward harness -0.9% RMSE, ROS forward +, ROS reverse - (not replicated)."
   }
  ]
 }
