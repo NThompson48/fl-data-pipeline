@@ -59,7 +59,15 @@ def read_sql_df(query, params: dict | None = None, statement_timeout_ms: int = 3
     apply (the pooler doesn't reliably honor connect_args options, so it's set
     explicitly inside the same transaction/backend connection here).
     """
-    engine = get_engine(statement_timeout_ms=statement_timeout_ms)
-    with engine.begin() as conn:
-        conn.execute(text(f"SET statement_timeout = {statement_timeout_ms}"))
-        return pd.read_sql(query, conn, params=params)
+    import time
+    from sqlalchemy.exc import DBAPIError
+    for attempt in range(1, 5):                  # a large transfer can be dropped by the pooler ('SSL connection has been closed unexpectedly', 2026-10-26): retry on a fresh connection
+        try:
+            engine = get_engine(statement_timeout_ms=statement_timeout_ms)
+            with engine.begin() as conn:
+                conn.execute(text(f"SET statement_timeout = {statement_timeout_ms}"))
+                return pd.read_sql(query, conn, params=params)
+        except (DBAPIError, pd.errors.DatabaseError) as ex:
+            if attempt == 4:
+                raise
+            print(f"  [read_sql_df] attempt {attempt} failed ({type(ex).__name__}); retrying", flush=True); time.sleep(5 * attempt)

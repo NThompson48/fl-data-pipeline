@@ -54,13 +54,21 @@ OUT_PATH = "2025_2026_pitches.parquet"
 
 
 def pull(years=(2025, 2026)) -> pd.DataFrame:
-    col_sql = ",\n           ".join(COLUMNS)
-    q = text(f"""
-        SELECT {col_sql}
-        FROM pitches
-        WHERE year = ANY(:years)
-    """)
-    df = read_sql_df(q, params={"years": list(years)})
+    """Monthly chunks with retries: one 550k-row query over the database connection was dropped mid-transfer ('SSL connection has been closed unexpectedly', 2026-10-26)."""
+    import time
+    col_sql = ", ".join(COLUMNS); parts = []
+    for yr in years:
+        for mo in range(1, 13):
+            d0 = f"{yr}-{mo:02d}-01"; d1 = f"{yr + 1}-01-01" if mo == 12 else f"{yr}-{mo + 1:02d}-01"
+            q = text(f"SELECT {col_sql} FROM pitches WHERE year = :y AND date >= :d0 AND date < :d1")
+            for attempt in range(1, 5):
+                try:
+                    parts.append(read_sql_df(q, params={"y": yr, "d0": d0, "d1": d1})); break
+                except Exception as ex:                                  # transient connection drop: wait and retry
+                    print(f"  {d0}: attempt {attempt} failed ({type(ex).__name__}); retrying", flush=True); time.sleep(5 * attempt)
+                    if attempt == 4:
+                        raise
+    df = pd.concat([p for p in parts if len(p)], ignore_index=True)
     return df.sort_values(["game_id", "pitch_uid"], kind="mergesort").reset_index(drop=True)      # canonical order (the database returns rows arbitrarily; fold assignments etc. depend on it)
 
 
