@@ -98,11 +98,11 @@ def load_trackman_seasons() -> pd.DataFrame:
     ls = ls.merge(war.drop(columns="player"), on=["name_clean", "year"], how="left")
     adv = read_sql_df(text("""select player, year, avg_ev, ev90, max_ev, barrel_pct, hardhit_pct, sweetspot_pct, pull_air_pct, gb_pct, whiff_pct, chase_pct,
                                      zswing_pct, zcontact_pct, swing_pct, xdamage, "PA" as pa_adv, game_type
-                              from advanced_splits where role='batter' and venue='All' and opp_tier='All' and game_type in ('reg_season','All')
-                                    and year in ('2025','2026')"""))
+                              from advanced_splits where role='batter' and opp_tier='All' and game_type = 'reg_season'
+                                    and year in ('2025','2026')"""))     # 2026-10-26: the table lost its 'venue' column (one row per player / game type / year) and now has regular-season rows for both years; regular season only (user rule), no fall-back to the all-games row
     adv["name_clean"] = adv["player"].apply(ip.lastfirst_to_clean)
     adv["year"] = adv["year"].astype(int)
-    # 2026 rows carry game_type 'All'; for 2025 prefer the regular-season row over the all-games row
+    # one regular-season row per player-year now; the preference / de-duplication below is kept as a guard
     adv = adv.assign(_pref=(adv["game_type"] == "reg_season").astype(int)).sort_values(["_pref", "pa_adv"], ascending=False)
     adv = adv.drop_duplicates(["name_clean", "year"]).drop(columns=["_pref", "game_type"])
     ls = ls.merge(adv.drop(columns=["player"]), on=["name_clean", "year"], how="left")
