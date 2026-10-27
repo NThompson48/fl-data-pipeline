@@ -762,7 +762,7 @@ if __name__ == "__main__":
     war_a = war.assign(player=war["player"].replace(PITCHER_NAME_ALIASES), w_ra9=war["ra9"] * war["ip"])                # one pitcher_id recorded under two spellings: sum both rows
     for yr in (2025, 2026):                                                                       # actual innings and RA9 from war_pitchers (RA9 is the table's own column; IP-weighted across a pitcher's team rows); NaN for no line or a shared name
         g = war_a[war_a["year"] == yr].groupby("player")[["ip", "w_ra9"]].sum(); final[f"ip_{yr}"] = final["pitcher"].map(g["ip"]).where(~dup); final[f"ra9_{yr}"] = final["pitcher"].map(g["w_ra9"] / g["ip"].where(g["ip"] > 0)).where(~dup)
-    lg_ra9 = 9 * war[war["year"] == 2026]["ra"].sum() / war[war["year"] == 2026]["ip"].sum(); final["lg_ra9"] = lg_ra9
+    w26_lg = war[war["year"] == 2026]; lg_ra9 = float(np.average(w26_lg["ra9"], weights=w26_lg["ip"])); final["lg_ra9"] = lg_ra9      # league RA9: the war_pitchers ra9 column, innings-weighted (equals 9 x RA / IP on every row)
     final["ra9_minus"] = 100 * final["proj_ra9_baseline"] / lg_ra9
     final["proj_war"] = (final["ra9_replacement"] - final["proj_ra9_baseline"]) * final["ip_unc"] / 9 / 10.706      # park-neutral WAR over the projected innings (runs per win 10.706)
 
