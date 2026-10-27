@@ -602,7 +602,7 @@ if __name__ == "__main__":
     raw = fp.load_fl_pitches_cached()
     import fl_position_player_flag as ppf
     raw = ppf.exclude(raw)     # same exclusion as fl_production_projection.py (air-trait model fit and roster)
-    war = read_sql_df("select player, year, bf, ip, so, bb, ra, ra9, rar, ppf, g "
+    war = read_sql_df("select player, year, bf, ip, so, bb, ra, ra9, rar, ppf, g, gs, throws "
                        "from war_pitchers where game_type='reg_season'")
 
     ra9_model, ra9_train_ranges = fit_ra9_baseline_model(war)
@@ -766,7 +766,10 @@ if __name__ == "__main__":
     final["ra9_minus"] = 100 * final["proj_ra9_baseline"] / lg_ra9
     final["proj_war"] = (final["ra9_replacement"] - final["proj_ra9_baseline"]) * final["ip_unc"] / 9 / 10.706      # park-neutral WAR over the projected innings (runs per win 10.706)
 
-    out_cols = ["pitcher_id", "pitcher", "team", "ip_2025", "ip_2026", "ra9_2025", "ra9_2026", "lg_ra9", "ra9_minus", "proj_war", "K_pred", "BB_pred", "k_bb_source",
+    # handedness and role for the player-page header: 'throws' from war_pitchers (most recent season on record); role = Starter if he started at least half of his games in the most recent season he pitched (2026, else 2025), else Reliever
+    wr = war_a.sort_values("year", ascending=False); thr = wr.dropna(subset=["throws"]).drop_duplicates("player").set_index("player")["throws"]; final["throws"] = final["pitcher"].map(thr).where(~dup)
+    last = wr[wr["g"] > 0].groupby("player").apply(lambda q: q[q["year"] == q["year"].max()][["g", "gs"]].sum(), include_groups=False); final["role"] = np.where(final["pitcher"].map(last["g"]).notna(), np.where(final["pitcher"].map(last["gs"]) / final["pitcher"].map(last["g"]) >= 0.5, "Starter", "Reliever"), None); final.loc[dup, "role"] = None
+    out_cols = ["pitcher_id", "pitcher", "team", "throws", "role", "ip_2025", "ip_2026", "ra9_2025", "ra9_2026", "lg_ra9", "ra9_minus", "proj_war", "K_pred", "BB_pred", "k_bb_source",
                 "ip_per_g_prior",
                 "proj_air_pct", "air_pct_sd", "air_pct_source", "proj_basis", "ip_unc", "p_return",
                 "proj_ra9_sd", "proj_ra9_sd_trustmark_half",
