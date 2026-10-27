@@ -758,13 +758,15 @@ if __name__ == "__main__":
         final, "proj_ra9_trustmark_half", "ra9_replacement_trustmark_half", final["proj_ra9_sd_trustmark_half"])
 
     # leaderboard columns (user layout 2026-10-08): 2026 innings, RA9- (100 x park-neutral RA9 / league RA9, lower = better), park-neutral WAR over the projected innings
-    w26 = war[war["year"] == 2026].groupby("player")["ip"].sum(); dup = final["pitcher"].map(final["pitcher"].value_counts()) > 1
-    final["ip_2026"] = final["pitcher"].map(w26).where(~dup)                                    # actual 2026 innings (NaN for pitchers with no 2026 line or a shared name)
+    dup = final["pitcher"].map(final["pitcher"].value_counts()) > 1
+    war_a = war.assign(player=war["player"].replace(PITCHER_NAME_ALIASES), w_ra9=war["ra9"] * war["ip"])                # one pitcher_id recorded under two spellings: sum both rows
+    for yr in (2025, 2026):                                                                       # actual innings and RA9 from war_pitchers (RA9 is the table's own column; IP-weighted across a pitcher's team rows); NaN for no line or a shared name
+        g = war_a[war_a["year"] == yr].groupby("player")[["ip", "w_ra9"]].sum(); final[f"ip_{yr}"] = final["pitcher"].map(g["ip"]).where(~dup); final[f"ra9_{yr}"] = final["pitcher"].map(g["w_ra9"] / g["ip"].where(g["ip"] > 0)).where(~dup)
     lg_ra9 = 9 * war[war["year"] == 2026]["ra"].sum() / war[war["year"] == 2026]["ip"].sum(); final["lg_ra9"] = lg_ra9
     final["ra9_minus"] = 100 * final["proj_ra9_baseline"] / lg_ra9
     final["proj_war"] = (final["ra9_replacement"] - final["proj_ra9_baseline"]) * final["ip_unc"] / 9 / 10.706      # park-neutral WAR over the projected innings (runs per win 10.706)
 
-    out_cols = ["pitcher_id", "pitcher", "team", "ip_2026", "lg_ra9", "ra9_minus", "proj_war", "K_pred", "BB_pred", "k_bb_source",
+    out_cols = ["pitcher_id", "pitcher", "team", "ip_2025", "ip_2026", "ra9_2025", "ra9_2026", "lg_ra9", "ra9_minus", "proj_war", "K_pred", "BB_pred", "k_bb_source",
                 "ip_per_g_prior",
                 "proj_air_pct", "air_pct_sd", "air_pct_source", "proj_basis", "ip_unc", "p_return",
                 "proj_ra9_sd", "proj_ra9_sd_trustmark_half",
