@@ -123,6 +123,10 @@
   {
    "date": "2026-10-26",
    "note": "C10 added before any 2027 data: network swstr_ct vs XGBoost wh_sva as the pitcher K% stuff term (production since 2026-10-25); production and counterfactual 2027 projections frozen"
+  },
+  {
+   "date": "2026-10-27",
+   "note": "Outlier watch list recorded before any 2027 data (prereg/outlier_watchlist_2027.md / .json; report only, no production change): isolation-forest outlier pitchers (top 5% / 10% by mean score) and outlier pitch types; after 2027 compare flagged pitchers' K% with the frozen projections (prereg/c10_frozen_projections.json)"
   }
  ]
 }
