@@ -80,7 +80,8 @@
    "report_only": "2026 -> 2027 year-to-year correlation of the stuff level on pitchers with >= 300 pitches in both seasons, fl_y2y_heldout design (frozen model trained on one season, held-out pitchers): swstr_ct (network) vs XGBoost wh_sva; at 2026-10-26 these were .78-.79 vs .84 (difference not significant)",
    "added": "2026-10-26 (before any 2027 data)"
   },
-  "C11 fastball-blend command term for BB% (report only)": "C11 (report only): preseason pitcher BB% with the fastball-blend command term (average of the all-pitch Command Score and the frozen-formula score on four-seams + sinkers, >= 50 fastballs) vs production; weighted RMSE / MAE, level-free, frozen standard weights, pitcher bootstrap; no production change"
+  "C11 fastball-blend command term for BB% (report only)": "C11 (report only): preseason pitcher BB% with the fastball-blend command term (average of the all-pitch Command Score and the frozen-formula score on four-seams + sinkers, >= 50 fastballs) vs production; weighted RMSE / MAE, level-free, frozen standard weights, pitcher bootstrap; no production change",
+  "C12 pitcher K% velocity level + recency (report only)": "C12 (report only): pitcher K% with fastball velocity LEVEL + velocity RECENCY (last 25% of pitches vs window, within-type velocity z) vs production and vs C1; weighted RMSE / MAE, level-free, frozen standard weights, pitcher bootstrap; no production change"
  },
  "frozen": {
   "p:k:fb_velo": {
@@ -119,6 +120,20 @@
    "b_command_score": 0.012134409095488543,
    "n_pitchers": 732,
    "projections_file": "prereg/fastball_blend_frozen_2027.json"
+  },
+  "p:k:c12": {
+   "coefficients": {
+    "fb_velo_per_mph": 0.004025963691240879,
+    "velo_rec25_per_sd": 0.02022071482061689
+   },
+   "constants": {
+    "mu_fb_velo": 88.41603659226486,
+    "mu_velo_rec25": 0.0536561025648303,
+    "n0_fb_velo": 7.1214698687915465,
+    "rec25_shrinkage": "none"
+   },
+   "n_pitchers": 732,
+   "projections_file": "prereg/velo_trend_frozen_2027.json"
   }
  },
  "amendments": [
@@ -137,6 +152,10 @@
   {
    "date": "2026-10-27",
    "note": "C11 added before any 2027 data (report only, no production change): fastball-blend command term vs production for pitcher BB%; production and counterfactual 2027 projections frozen (prereg/fastball_blend_frozen_2027.json). Evidence: walk-forward harness -0.9% RMSE, ROS forward +, ROS reverse - (not replicated)."
+  },
+  {
+   "date": "2026-10-28",
+   "note": "C12 added before any 2027 data (report only, no production change): pitcher K% with fastball velocity level + velocity recency vs production and C1; coefficients and per-pitcher 2027 features / projections frozen (prereg/velo_trend_frozen_2027.json). Evidence: held-out K% RMSE -1.2 to -2.5% (level alone -1.0 to -2.0%), feature picked from a 36-feature screen (q .42), so optimistic."
   }
  ]
 }
